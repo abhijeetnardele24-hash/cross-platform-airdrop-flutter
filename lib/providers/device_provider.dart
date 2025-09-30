@@ -1,35 +1,18 @@
-<<<<<<< HEAD
-import 'dart:convert';
-import 'package:flutter/foundation.dart';
-import 'package:flutter_webrtc/flutter_webrtc.dart';
-// Note: We will create a simple signaling service to help devices find each other.
-// For now, it is a placeholder.
-import 'package:web_socket_channel/web_socket_channel.dart';
-
-=======
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:uuid/uuid.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
->>>>>>> f12af1b220791c3a97c52939a2dc5fd17d782d2b
 import '../models/device_model.dart';
 
 class DeviceProvider extends ChangeNotifier {
-  // --- WebRTC Properties ---
-  RTCPeerConnection? _peerConnection;
-  final List<DeviceModel> _discoveredDevices = [];
-<<<<<<< HEAD
-  SignalingService _signalingService = SignalingService();
+  // Callback for file available notification
+  void Function(Map<String, dynamic> file)? onFileAvailable;
 
-  // --- App State Properties ---
-  DeviceModel? _currentDevice; // You can still get local device info
-  bool _isConnecting = false;
-=======
+  final List<DeviceModel> _discoveredDevices = [];
   DeviceModel? _currentDevice;
   Timer? _discoveryTimer;
   Timer? _broadcastTimer;
@@ -45,39 +28,27 @@ class DeviceProvider extends ChangeNotifier {
   bool _isConnected = false;
 
   // Signaling server URL - Make sure this matches your actual server URL
-  static const String _signalingServerUrl =
-      'wss://05538fa4-e385-477a-87a8-931b4c9d6a50-00-3pwqi7zydzj4c.sisko.replit.dev:3000';
+  static const String signalingServerUrl = 'ws://192.168.1.4:3000';
+
+  // HTTP base for REST endpoints derived from WS URL
+  static String get httpBase {
+    if (signalingServerUrl.startsWith('wss://')) {
+      return signalingServerUrl.replaceFirst('wss://', 'https://');
+    }
+    if (signalingServerUrl.startsWith('ws://')) {
+      return signalingServerUrl.replaceFirst('ws://', 'http://');
+    }
+    return signalingServerUrl;
+  }
 
   List<DeviceModel> get discoveredDevices =>
       List.unmodifiable(_discoveredDevices);
   DeviceModel? get currentDevice => _currentDevice;
   bool get isDiscovering => _isDiscovering;
   bool get isConnected => _isConnected;
->>>>>>> f12af1b220791c3a97c52939a2dc5fd17d782d2b
-
-  List<DeviceModel> get discoveredDevices => _discoveredDevices;
-  bool get isConnecting => _isConnecting;
 
   // Constructor
   Future<void> initialize() async {
-<<<<<<< HEAD
-    // We will connect to our signaling server to discover other devices
-    _signalingService.connect();
-
-    // Listen for messages from the signaling server
-    _signalingService.onMessage = (type, data) {
-      switch (type) {
-        case 'peers':
-          // The server sent us a list of other connected devices
-          final List peers = data['peers'];
-          _discoveredDevices.clear();
-          for (var peer in peers) {
-            _discoveredDevices.add(DeviceModel.fromJson(peer));
-          }
-          notifyListeners();
-          break;
-        // Other cases for handling WebRTC offers/answers will go here later
-=======
     debugPrint('DeviceProvider: Initializing...');
     await _initializeCurrentDevice();
     await _connectToSignalingServer();
@@ -88,7 +59,11 @@ class DeviceProvider extends ChangeNotifier {
     try {
       final deviceId = _uuid.v4();
       final deviceName = await _getDeviceName();
-      final ipAddress = await _networkInfo.getWifiIP() ?? '127.0.0.1';
+      // On web, NetworkInfoPlus and Platform APIs are not supported.
+      // Use a safe fallback IP and generic type so the client can announce itself.
+      final ipAddress = kIsWeb
+          ? '127.0.0.1'
+          : (await _networkInfo.getWifiIP() ?? '127.0.0.1');
       final deviceType = await _getDeviceType();
 
       _currentDevice = DeviceModel(
@@ -100,15 +75,31 @@ class DeviceProvider extends ChangeNotifier {
         lastSeen: DateTime.now(),
       );
 
-      debugPrint('DeviceProvider: Current device initialized - ${_currentDevice!.name} (${_currentDevice!.id})');
+      debugPrint(
+          'DeviceProvider: Current device initialized - ${_currentDevice!.name} (${_currentDevice!.id})');
       notifyListeners();
     } catch (e) {
       debugPrint('Error initializing current device: $e');
+      // Fallback to a minimal current device so discovery/broadcast still works
+      try {
+        _currentDevice = DeviceModel(
+          id: _uuid.v4(),
+          name: kIsWeb ? 'Web Browser' : 'Unknown Device',
+          ipAddress: '127.0.0.1',
+          type: kIsWeb ? DeviceType.windows : DeviceType.unknown,
+          isOnline: true,
+          lastSeen: DateTime.now(),
+        );
+        notifyListeners();
+      } catch (_) {}
     }
   }
 
   Future<String> _getDeviceName() async {
     try {
+      if (kIsWeb) {
+        return 'Web Browser';
+      }
       if (Platform.isAndroid) {
         final androidInfo = await _deviceInfo.androidInfo;
         return '${androidInfo.brand} ${androidInfo.model}';
@@ -124,36 +115,15 @@ class DeviceProvider extends ChangeNotifier {
       } else if (Platform.isLinux) {
         final linuxInfo = await _deviceInfo.linuxInfo;
         return linuxInfo.name;
->>>>>>> f12af1b220791c3a97c52939a2dc5fd17d782d2b
       }
-    };
+    } catch (e) {
+      debugPrint('Error getting device name: $e');
+    }
+    return 'Unknown Device';
   }
 
-<<<<<<< HEAD
-  Future<void> connectToDevice(DeviceModel device) async {
-    _isConnecting = true;
-    notifyListeners();
-
-    // In WebRTC, you create a "peer connection"
-    _peerConnection = await createPeerConnection({
-      'iceServers': [
-        {'url': 'stun:stun.l.google.com:19302'},
-      ]
-    }, {});
-
-    // Then you create an "offer" to send to the other device
-    RTCSessionDescription offer = await _peerConnection!.createOffer({});
-    await _peerConnection!.setLocalDescription(offer);
-
-    // We send this offer via the signaling server
-    _signalingService.send('offer', {
-      'offer': offer.toMap(),
-      'target': device.id, // The ID of the device we want to connect to
-    });
-
-    _isConnecting = false;
-=======
   Future<DeviceType> _getDeviceType() async {
+    if (kIsWeb) return DeviceType.windows;
     if (Platform.isAndroid) return DeviceType.android;
     if (Platform.isIOS) return DeviceType.ios;
     if (Platform.isWindows) return DeviceType.windows;
@@ -165,14 +135,14 @@ class DeviceProvider extends ChangeNotifier {
   Future<void> _connectToSignalingServer() async {
     try {
       debugPrint('DeviceProvider: Connecting to signaling server...');
-      
+
       _channel = WebSocketChannel.connect(
-        Uri.parse(_signalingServerUrl),
+        Uri.parse(signalingServerUrl),
       );
 
       // Wait for connection to be established
       await _channel!.ready;
-      
+
       _channelSubscription = _channel!.stream.listen(
         _handleWebSocketMessage,
         onError: (error) {
@@ -192,7 +162,6 @@ class DeviceProvider extends ChangeNotifier {
       _isConnected = true;
       notifyListeners();
       debugPrint('DeviceProvider: Connected to signaling server successfully');
-      
     } catch (e) {
       debugPrint('Failed to connect to signaling server: $e');
       _isConnected = false;
@@ -229,6 +198,9 @@ class DeviceProvider extends ChangeNotifier {
         case 'heartbeat':
           _handleHeartbeat(data);
           break;
+        case 'file_available':
+          _handleFileAvailable(data);
+          break;
         default:
           debugPrint('Unknown message type: $messageType');
       }
@@ -237,25 +209,44 @@ class DeviceProvider extends ChangeNotifier {
     }
   }
 
-  void _handleDeviceAnnouncement(Map<String, dynamic> data) {
-    debugPrint('DeviceProvider: Handling device announcement: $data');
+  void _handleFileAvailable(Map<String, dynamic> data) {
     try {
+      final file = data['file'] as Map<String, dynamic>;
+      debugPrint('DeviceProvider: File available notification: $file');
+      // Notify listeners or callback
+      if (onFileAvailable != null) {
+        onFileAvailable!(file);
+      }
+    } catch (e) {
+      debugPrint('Error handling file_available: $e');
+    }
+  }
+
+  void _handleDeviceAnnouncement(Map<String, dynamic> data) {
+    debugPrint('DeviceProvider: Handling device announcement (raw): $data');
+    try {
+      if (!data.containsKey('device')) {
+        debugPrint(
+            'DeviceProvider: Announcement missing device key! Data: $data');
+        return;
+      }
       final deviceData = data['device'] as Map<String, dynamic>;
       debugPrint('DeviceProvider: Extracted device data: $deviceData');
 
       final device = DeviceModel(
-        id: deviceData['id'] as String,
-        name: deviceData['name'] as String,
-        ipAddress: deviceData['ipAddress'] as String,
-        type: _parseDeviceType(deviceData['type'] as String),
+        id: deviceData['id'] as String? ?? '',
+        name: deviceData['name'] as String? ?? '',
+        ipAddress: deviceData['ipAddress'] as String? ?? '',
+        type: _parseDeviceType(deviceData['type'] as String? ?? 'unknown'),
         isOnline: deviceData['isOnline'] as bool? ?? true,
         lastSeen: DateTime.now(),
       );
 
-      debugPrint('DeviceProvider: Created device object: ${device.name}, ID: ${device.id}');
+      debugPrint('DeviceProvider: Created device object: ${device.toString()}');
       _addOrUpdateDevice(device);
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('Error handling device announcement: $e');
+      debugPrint('Stack trace: $st');
     }
   }
 
@@ -263,8 +254,9 @@ class DeviceProvider extends ChangeNotifier {
     debugPrint('DeviceProvider: Handling device list: $data');
     try {
       final devices = data['devices'] as List<dynamic>;
-      debugPrint('DeviceProvider: Processing ${devices.length} devices from list');
-      
+      debugPrint(
+          'DeviceProvider: Processing ${devices.length} devices from list');
+
       for (final deviceData in devices) {
         final device = DeviceModel(
           id: deviceData['id'] as String,
@@ -358,7 +350,7 @@ class DeviceProvider extends ChangeNotifier {
 
   Future<void> startDiscovery() async {
     debugPrint('DeviceProvider: Starting discovery...');
-    
+
     if (_isDiscovering) {
       debugPrint('DeviceProvider: Discovery already in progress');
       return;
@@ -378,7 +370,7 @@ class DeviceProvider extends ChangeNotifier {
     if (_isConnected) {
       // Clear existing devices
       _discoveredDevices.clear();
-      
+
       // Start broadcasting our presence
       _startBroadcast();
 
@@ -390,7 +382,7 @@ class DeviceProvider extends ChangeNotifier {
 
       // Start cleanup timer
       _startCleanupTimer();
-      
+
       debugPrint('DeviceProvider: Discovery started successfully');
     } else {
       debugPrint('DeviceProvider: Failed to start discovery - not connected');
@@ -425,25 +417,30 @@ class DeviceProvider extends ChangeNotifier {
 
   Future<void> _broadcastPresence() async {
     if (_currentDevice == null || !_isConnected) {
-      debugPrint('DeviceProvider: Cannot broadcast - no current device or not connected');
+      debugPrint(
+          'DeviceProvider: Cannot broadcast - no current device or not connected');
       return;
     }
 
     try {
+      final deviceMap = {
+        'id': _currentDevice!.id ?? '',
+        'name': _currentDevice!.name ?? '',
+        'ipAddress': _currentDevice!.ipAddress ?? '',
+        'type': _deviceTypeToString(_currentDevice!.type),
+        'isOnline': true,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      };
+      debugPrint('DeviceProvider: About to broadcast device: $deviceMap');
       final message = {
         'type': 'announce_device',
-        'device': {
-          'id': _currentDevice!.id,
-          'name': _currentDevice!.name,
-          'ipAddress': _currentDevice!.ipAddress,
-          'type': _deviceTypeToString(_currentDevice!.type),
-          'isOnline': true,
-          'timestamp': DateTime.now().millisecondsSinceEpoch,
-        }
+        'device': deviceMap,
       };
-
-      debugPrint('DeviceProvider: Broadcasting presence: ${jsonEncode(message)}');
-      _channel?.sink.add(jsonEncode(message));
+      debugPrint(
+          'DeviceProvider: Full announce_device message (Map): $message');
+      final encoded = jsonEncode(message);
+      debugPrint('DeviceProvider: Broadcasting presence (JSON): $encoded');
+      _channel?.sink.add(encoded);
     } catch (e) {
       debugPrint('Error broadcasting presence: $e');
     }
@@ -462,7 +459,8 @@ class DeviceProvider extends ChangeNotifier {
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       };
 
-      debugPrint('DeviceProvider: Requesting device list: ${jsonEncode(message)}');
+      debugPrint(
+          'DeviceProvider: Requesting device list: ${jsonEncode(message)}');
       _channel?.sink.add(jsonEncode(message));
     } catch (e) {
       debugPrint('Error requesting device list: $e');
@@ -503,7 +501,8 @@ class DeviceProvider extends ChangeNotifier {
   }
 
   void _addOrUpdateDevice(DeviceModel device) {
-    debugPrint('DeviceProvider: Adding/updating device: ${device.name} with ID: ${device.id}');
+    debugPrint(
+        'DeviceProvider: Adding/updating device: ${device.name} with ID: ${device.id}');
 
     // Don't add our own device
     if (device.id == _currentDevice?.id) {
@@ -511,23 +510,26 @@ class DeviceProvider extends ChangeNotifier {
       return;
     }
 
-    final existingIndex = _discoveredDevices.indexWhere((d) => d.id == device.id);
-    
+    final existingIndex =
+        _discoveredDevices.indexWhere((d) => d.id == device.id);
+
     if (existingIndex != -1) {
-      debugPrint('DeviceProvider: Updating existing device at index $existingIndex');
+      debugPrint(
+          'DeviceProvider: Updating existing device at index $existingIndex');
       _discoveredDevices[existingIndex] = device.copyWith(
         isOnline: true,
-        lastSeen: DateTime.now(),
+        lastSeen: DateTime.now() ?? DateTime.now(),
       );
     } else {
       debugPrint('DeviceProvider: Adding new device to list');
       _discoveredDevices.add(device);
     }
 
-    debugPrint('DeviceProvider: Total discovered devices now: ${_discoveredDevices.length}');
-    debugPrint('DeviceProvider: Device list: ${_discoveredDevices.map((d) => '${d.name}(${d.id})').toList()}');
+    debugPrint(
+        'DeviceProvider: Total discovered devices now: ${_discoveredDevices.length}');
+    debugPrint(
+        'DeviceProvider: Device list: ${_discoveredDevices.map((d) => '${d.name}(${d.id})').toList()}');
 
->>>>>>> f12af1b220791c3a97c52939a2dc5fd17d782d2b
     notifyListeners();
     debugPrint('DeviceProvider: notifyListeners() called');
   }
@@ -537,12 +539,6 @@ class DeviceProvider extends ChangeNotifier {
     _addOrUpdateDevice(device);
   }
 
-<<<<<<< HEAD
-  @override
-  void dispose() {
-    _signalingService.dispose();
-    _peerConnection?.dispose();
-=======
   void removeDiscoveredDevice(String deviceId) {
     debugPrint('DeviceProvider: Removing device: $deviceId');
     _discoveredDevices.removeWhere((device) => device.id == deviceId);
@@ -550,12 +546,16 @@ class DeviceProvider extends ChangeNotifier {
   }
 
   void updateDeviceStatus(String deviceId, bool isOnline) {
-    final index = _discoveredDevices.indexWhere((device) => device.id == deviceId);
+    final index =
+        _discoveredDevices.indexWhere((device) => device.id == deviceId);
     if (index != -1) {
-      debugPrint('DeviceProvider: Updating device status: $deviceId -> ${isOnline ? 'online' : 'offline'}');
+      debugPrint(
+          'DeviceProvider: Updating device status: $deviceId -> ${isOnline ? 'online' : 'offline'}');
       _discoveredDevices[index] = _discoveredDevices[index].copyWith(
         isOnline: isOnline,
-        lastSeen: isOnline ? DateTime.now() : _discoveredDevices[index].lastSeen,
+        lastSeen: isOnline
+            ? DateTime.now() ?? DateTime.now()
+            : _discoveredDevices[index].lastSeen,
       );
       notifyListeners();
     }
@@ -564,32 +564,35 @@ class DeviceProvider extends ChangeNotifier {
   void _cleanupOfflineDevices() {
     final now = DateTime.now();
     final initialCount = _discoveredDevices.length;
-    
+
     // Remove devices not seen for 5 minutes
     _discoveredDevices.removeWhere((device) {
-      final timeSinceLastSeen = now.difference(device.lastSeen);
+      final timeSinceLastSeen =
+          now.difference(device.lastSeen ?? DateTime.now());
       return timeSinceLastSeen.inMinutes > 5;
     });
 
     // Mark devices as offline if not seen recently
     bool hasChanges = false;
     for (int i = 0; i < _discoveredDevices.length; i++) {
-      final timeSinceLastSeen = now.difference(_discoveredDevices[i].lastSeen);
+      final timeSinceLastSeen =
+          now.difference(_discoveredDevices[i].lastSeen ?? DateTime.now());
       if (timeSinceLastSeen.inMinutes > 2 && _discoveredDevices[i].isOnline) {
         _discoveredDevices[i] = _discoveredDevices[i].copyWith(isOnline: false);
         hasChanges = true;
       }
     }
-    
+
     if (_discoveredDevices.length != initialCount || hasChanges) {
-      debugPrint('DeviceProvider: Cleaned up devices - removed ${initialCount - _discoveredDevices.length}, marked some offline');
+      debugPrint(
+          'DeviceProvider: Cleaned up devices - removed ${initialCount - _discoveredDevices.length}, marked some offline');
       notifyListeners();
     }
   }
 
   Future<void> stopDiscovery() async {
     debugPrint('DeviceProvider: Stopping discovery...');
-    
+
     _isDiscovering = false;
     _discoveryTimer?.cancel();
     _broadcastTimer?.cancel();
@@ -655,7 +658,8 @@ class DeviceProvider extends ChangeNotifier {
       debugPrint('DeviceProvider: Scheduling reconnection attempt...');
       Timer(const Duration(seconds: 5), () {
         if (!_isConnected) {
-          debugPrint('DeviceProvider: Attempting to reconnect to signaling server...');
+          debugPrint(
+              'DeviceProvider: Attempting to reconnect to signaling server...');
           _connectToSignalingServer();
         }
       });
@@ -670,54 +674,6 @@ class DeviceProvider extends ChangeNotifier {
     _heartbeatTimer?.cancel();
     _channelSubscription?.cancel();
     _channel?.sink.close();
->>>>>>> f12af1b220791c3a97c52939a2dc5fd17d782d2b
     super.dispose();
-  }
-}
-
-// --- A simple Signaling Service using WebSockets ---
-// This is a basic client. You will need a simple server for this to connect to.
-class SignalingService {
-  WebSocketChannel? _channel;
-  Function(String type, dynamic data)? onMessage;
-
-  void connect() {
-    try {
-      // --- IMPORTANT ---
-      // Connect to a local signaling server for stable development.
-      // You need to run a simple WebSocket server on your machine.
-      // The '10.0.2.2' IP is a special alias for your computer's localhost from the Android emulator.
-      final uri = kIsWeb
-          ? Uri.parse('ws://localhost:8080') // For web, use localhost
-          : Uri.parse(
-              'ws://10.0.2.2:8080'); // For Android emulator, use the special IP
-
-      _channel = WebSocketChannel.connect(uri);
-
-      _channel!.stream.listen((message) {
-        final decoded = jsonDecode(message);
-        final type = decoded['type'];
-        final data = decoded['data'];
-        if (onMessage != null) {
-          onMessage!(type, data);
-        }
-      }, onError: (error) {
-        debugPrint('Signaling Error: $error');
-      }, onDone: () {
-        debugPrint('Signaling Channel Closed');
-      });
-    } catch (e) {
-      debugPrint('Error connecting to signaling server: $e');
-    }
-  }
-
-  void send(String type, dynamic data) {
-    if (_channel != null) {
-      _channel!.sink.add(jsonEncode({'type': type, 'data': data}));
-    }
-  }
-
-  void dispose() {
-    _channel?.sink.close();
   }
 }

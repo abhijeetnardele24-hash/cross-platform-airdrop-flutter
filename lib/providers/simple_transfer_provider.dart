@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -11,7 +11,7 @@ class SimpleTransferProvider extends ChangeNotifier {
   HttpServer? _server;
   bool _isServerRunning = false;
   String _serverUrl = '';
-  List<Map<String, dynamic>> _sharedFiles = [];
+  final List<Map<String, dynamic>> _sharedFiles = [];
   
   bool get isServerRunning => _isServerRunning;
   String get serverStatus => _isServerRunning ? 'Server: $_serverUrl' : 'Server not started';

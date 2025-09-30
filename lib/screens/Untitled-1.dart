@@ -56,8 +56,7 @@ class DeviceProvider extends ChangeNotifier {
         isOnline: true,
         lastSeen: DateTime.now(),
       );
-
-      notifyListeners();
+      // Removed notifyListeners() here to prevent build/update flood
     } catch (e) {
       debugPrint('Error initializing current device: $e');
     }

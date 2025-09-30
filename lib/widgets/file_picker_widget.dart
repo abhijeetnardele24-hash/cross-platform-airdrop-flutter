@@ -1,8 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart'
-    show FilePicker, FilePickerResult, FileType;
-import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 
 class FilePickerWidget extends StatefulWidget {
@@ -28,31 +27,55 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      height: 500,
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(12),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFFEFEFE), // warmWhite
+            Color(0xFFF8FAFC), // softGray
+          ],
+        ),
+        borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+            color: const Color(0xFF1E3A8A).withValues(alpha: 0.12),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+            spreadRadius: 4,
+          ),
+          BoxShadow(
+            color: Colors.white.withValues(alpha: 0.9),
+            blurRadius: 24,
+            offset: const Offset(-12, -12),
+            spreadRadius: -12,
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildHeader(),
-          const SizedBox(height: 16),
-          _buildFileTypeButtons(),
-          const SizedBox(height: 16),
-          if (_selectedFiles.isNotEmpty) ...[
-            _buildSelectedFilesList(),
-            const SizedBox(height: 16),
-          ],
-          _buildActionButtons(),
-        ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildHeader(),
+                const SizedBox(height: 20),
+                _buildFileTypeButtons(),
+                const SizedBox(height: 20),
+                if (_selectedFiles.isNotEmpty) ...[
+                  _buildSelectedFilesList(),
+                  const SizedBox(height: 20),
+                ],
+                _buildActionButtons(),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -60,12 +83,30 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
   Widget _buildHeader() {
     return Row(
       children: [
-        Icon(
-          Icons.folder_open,
-          color: Theme.of(context).primaryColor,
-          size: 24,
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Theme.of(context).primaryColor.withValues(alpha: 0.2),
+                Theme.of(context).primaryColor.withValues(alpha: 0.1),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Theme.of(context).primaryColor.withValues(alpha: 0.2),
+              width: 1,
+            ),
+          ),
+          child: Icon(
+            CupertinoIcons.share,
+            color: Theme.of(context).primaryColor,
+            size: 28,
+          ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 16),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,68 +114,124 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
               Text(
                 'Select Files to Share',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Theme.of(context).textTheme.titleLarge?.color,
+                  color: Theme.of(context).textTheme.headlineSmall?.color,
+                  letterSpacing: 0.5,
                 ),
               ),
-              Text(
-                widget.allowMultiple
-                    ? 'Choose one or more files'
-                    : 'Choose a single file',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  widget.allowMultiple
+                      ? '📱 Choose multiple files to share'
+                      : '📱 Choose a single file to share',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(context).primaryColor,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
           ),
         ),
         if (_selectedFiles.isNotEmpty)
-          IconButton(
-            onPressed: _clearSelection,
-            icon: const Icon(Icons.clear_all),
-            tooltip: 'Clear all',
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.red.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.red.withValues(alpha: 0.2),
+                width: 1,
+              ),
+            ),
+            child: CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: _clearSelection,
+              child: const Icon(CupertinoIcons.clear_circled_solid,
+                  color: Colors.red),
+            ),
           ),
       ],
     );
   }
 
   Widget _buildFileTypeButtons() {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildFileTypeButton(
-          icon: Icons.photo,
-          label: 'Photos',
-          color: Colors.blue,
-          onPressed: () => _pickFiles(FileType.image),
+        Row(
+          children: [
+            Icon(
+              CupertinoIcons.list_bullet,
+              size: 18,
+              color: Colors.grey[600],
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'File Categories',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+              ),
+            ),
+          ],
         ),
-        _buildFileTypeButton(
-          icon: Icons.videocam,
-          label: 'Videos',
-          color: Colors.red,
-          onPressed: () => _pickFiles(FileType.video),
+        const SizedBox(height: 12),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: 2.8,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          children: [
+            _buildFileTypeButton(
+              icon: Icons.photo_camera_rounded,
+              label: 'Photos',
+              emoji: '📸',
+              color: const Color(0xFF1E3A8A), // royalBlue
+              onPressed: () => _pickFiles(FileType.image),
+            ),
+            _buildFileTypeButton(
+              icon: Icons.videocam_rounded,
+              label: 'Videos',
+              emoji: '🎥',
+              color: const Color(0xFFDC2626), // crimsonRed
+              onPressed: () => _pickFiles(FileType.video),
+            ),
+            _buildFileTypeButton(
+              icon: Icons.music_note_rounded,
+              label: 'Audio',
+              emoji: '🎵',
+              color: const Color(0xFFD97706), // goldenAmber
+              onPressed: () => _pickFiles(FileType.audio),
+            ),
+            _buildFileTypeButton(
+              icon: Icons.description_rounded,
+              label: 'Documents',
+              emoji: '📄',
+              color: const Color(0xFF059669), // emeraldGreen
+              onPressed: () =>
+                  _pickFiles(FileType.custom, ['pdf', 'doc', 'docx', 'txt']),
+            ),
+          ],
         ),
+        const SizedBox(height: 12),
         _buildFileTypeButton(
-          icon: Icons.music_note,
-          label: 'Audio',
-          color: Colors.orange,
-          onPressed: () => _pickFiles(FileType.audio),
-        ),
-        _buildFileTypeButton(
-          icon: Icons.description,
-          label: 'Documents',
-          color: Colors.green,
-          onPressed: () =>
-              _pickFiles(FileType.custom, ['pdf', 'doc', 'docx', 'txt']),
-        ),
-        _buildFileTypeButton(
-          icon: Icons.folder,
-          label: 'Any File',
-          color: Colors.purple,
+          icon: Icons.folder_open_rounded,
+          label: 'Browse All Files',
+          emoji: '📁',
+          color: const Color(0xFF7C3AED), // deepPurple
           onPressed: () => _pickFiles(FileType.any),
+          isFullWidth: true,
         ),
       ],
     );
@@ -145,19 +242,76 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
     required String label,
     required Color color,
     required VoidCallback onPressed,
+    String? emoji,
+    bool isFullWidth = false,
   }) {
-    return ElevatedButton.icon(
-      onPressed: _isLoading ? null : onPressed,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color.withOpacity(0.1),
-        foregroundColor: color,
-        elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: color.withOpacity(0.3)),
+    return Container(
+      width: isFullWidth ? double.infinity : null,
+      height: isFullWidth ? 56 : null,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withValues(alpha: 0.1),
+            color.withValues(alpha: 0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: color.withValues(alpha: 0.3),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: CupertinoButton(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        onPressed: _isLoading ? null : onPressed,
+        child: Row(
+          mainAxisSize: isFullWidth ? MainAxisSize.max : MainAxisSize.min,
+          mainAxisAlignment:
+              isFullWidth ? MainAxisAlignment.center : MainAxisAlignment.start,
+          children: [
+            if (emoji != null) ...[
+              Text(
+                emoji,
+                style: const TextStyle(fontSize: 20),
+              ),
+              const SizedBox(width: 8),
+            ] else ...[
+              Icon(
+                icon,
+                size: 20,
+                color: color,
+              ),
+              const SizedBox(width: 8),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: isFullWidth ? 16 : 14,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+            if (_isLoading && isFullWidth) ...[
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CupertinoActivityIndicator(
+                  radius: 8,
+                  color: color,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -167,10 +321,10 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey.withOpacity(0.05),
+        color: Colors.grey.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: Colors.grey.withOpacity(0.2),
+          color: Colors.grey.withValues(alpha: 0.2),
         ),
       ),
       child: Column(
@@ -231,15 +385,12 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
                   ],
                 ),
               ),
-              IconButton(
-                onPressed: () => _removeFile(index),
-                icon: const Icon(Icons.close),
-                iconSize: 20,
+              CupertinoButton(
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(
-                  minWidth: 32,
-                  minHeight: 32,
-                ),
+                minimumSize: Size.zero,
+                onPressed: () => _removeFile(index),
+                child: const Icon(CupertinoIcons.xmark,
+                    color: Colors.red, size: 20),
               ),
             ],
           ),
@@ -305,33 +456,133 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
   }
 
   Widget _buildActionButtons() {
-    return Row(
+    if (_selectedFiles.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
       children: [
-        if (_selectedFiles.isNotEmpty)
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: _isLoading ? null : _sendFiles,
-              icon: _isLoading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send),
-              label: Text(_isLoading ? 'Processing...' : 'Send Files'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+        Container(
+          width: double.infinity,
+          height: 56,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Theme.of(context).primaryColor,
+                Theme.of(context).primaryColor.withValues(alpha: 0.8),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Theme.of(context).primaryColor.withValues(alpha: 0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
               ),
+            ],
+          ),
+          child: CupertinoButton(
+            color: Theme.of(context).primaryColor,
+            borderRadius: BorderRadius.circular(16),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            onPressed: _isLoading ? null : _sendFiles,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_isLoading) ...[
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CupertinoActivityIndicator(
+                      radius: 10,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Processing...',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ] else ...[
+                  const Icon(
+                    CupertinoIcons.arrow_right_circle,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Send ${_selectedFiles.length} File${_selectedFiles.length > 1 ? 's' : ''}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${_selectedFiles.length}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-        if (_selectedFiles.isNotEmpty) const SizedBox(width: 8),
-        TextButton.icon(
-          onPressed: _isLoading ? null : () => _pickFiles(FileType.any),
-          icon: const Icon(Icons.add),
-          label: const Text('Add More'),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Colors.grey.shade300,
+              width: 1,
+            ),
+          ),
+          child: CupertinoButton(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(16),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            onPressed: _isLoading ? null : () => _pickFiles(FileType.any),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  CupertinoIcons.plus,
+                  color: Colors.grey[700],
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Add More Files',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[700],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );
@@ -344,15 +595,6 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
     });
 
     try {
-      // Request permissions
-      if (Platform.isAndroid || Platform.isIOS) {
-        final status = await Permission.storage.request();
-        if (!status.isGranted) {
-          _showPermissionDialog();
-          return;
-        }
-      }
-
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: type,
         allowMultiple: widget.allowMultiple && _selectedFiles.isEmpty,
@@ -408,38 +650,14 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
-  void _showPermissionDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Permission Required'),
-        content: const Text(
-            'Storage permission is required to access files. Please grant permission in settings.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              openAppSettings();
-            },
-            child: const Text('Settings'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showErrorDialog(String message) {
-    showDialog(
+    showCupertinoDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => CupertinoAlertDialog(
         title: const Text('Error'),
         content: Text(message),
         actions: [
-          TextButton(
+          CupertinoDialogAction(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('OK'),
           ),

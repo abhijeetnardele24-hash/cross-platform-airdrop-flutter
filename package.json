@@ -1,0 +1,30 @@
+{
+  "name": "cross-platform-airdrop-flutter",
+  "version": "1.0.0",
+  "description": "A cross-platform file transfer app built with Flutter, similar to Apple AirDrop. Supports Windows and Mac desktop file sharing over Wi-Fi.\r # Cross-Platform AirDrop (Windows ↔️ macOS)",
+  "main": "server.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/team-narcos/cross-platform-airdrop-flutter.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/team-narcos/cross-platform-airdrop-flutter/issues"
+  },
+  "homepage": "https://github.com/team-narcos/cross-platform-airdrop-flutter#readme",
+  "dependencies": {
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "ws": "^8.18.3"
+  }
+}

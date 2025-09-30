@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/transfer_model.dart';
 import '../providers/file_transfer_provider.dart';
 import 'package:path/path.dart' as path;
+import 'vignette_grain_background.dart';
 
 class TransferProgressWidget extends StatelessWidget {
   final TransferModel transfer;
@@ -16,23 +17,36 @@ class TransferProgressWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(context),
-            const SizedBox(height: 12),
-            _buildProgressBar(context),
-            if (showDetails) ...[
-              const SizedBox(height: 12),
-              _buildDetails(context),
-            ],
-            const SizedBox(height: 12),
-            _buildActionButtons(context),
-          ],
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutCubic,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Card(
+        elevation: 8,
+        shadowColor: _getProgressColor().withValues(alpha: 0.2),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: VignetteGrainBackground(
+            grainOpacity: 0.03,
+            grainDensity: 5,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeader(context),
+                const SizedBox(height: 12),
+                _buildProgressBar(context),
+                if (showDetails) ...[
+                  const SizedBox(height: 12),
+                  _buildDetails(context),
+                ],
+                const SizedBox(height: 12),
+                _buildActionButtons(context),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -122,20 +136,34 @@ class TransferProgressWidget extends StatelessWidget {
     }
 
     return Container(
-      width: 48,
-      height: 48,
+      width: 56,
+      height: 56,
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: color.withOpacity(0.3),
-          width: 1,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withValues(alpha: 0.15),
+            color.withValues(alpha: 0.05),
+          ],
         ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: color.withValues(alpha: 0.3),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Icon(
         iconData,
         color: color,
-        size: 24,
+        size: 28,
       ),
     );
   }
@@ -147,59 +175,78 @@ class TransferProgressWidget extends StatelessWidget {
 
     switch (transfer.status) {
       case TransferStatus.pending:
-        backgroundColor = Colors.orange.withOpacity(0.1);
+        backgroundColor = Colors.orange.withValues(alpha: 0.1);
         textColor = Colors.orange;
         iconData = Icons.schedule;
         break;
       case TransferStatus.connecting:
-        backgroundColor = Colors.blue.withOpacity(0.1);
+        backgroundColor = Colors.blue.withValues(alpha: 0.1);
         textColor = Colors.blue;
         iconData = Icons.wifi;
         break;
       case TransferStatus.transferring:
-        backgroundColor = Colors.green.withOpacity(0.1);
+        backgroundColor = Colors.green.withValues(alpha: 0.1);
         textColor = Colors.green;
         iconData = Icons.sync;
         break;
       case TransferStatus.paused:
-        backgroundColor = Colors.amber.withOpacity(0.1);
+        backgroundColor = Colors.amber.withValues(alpha: 0.1);
         textColor = Colors.amber;
         iconData = Icons.pause;
         break;
       case TransferStatus.completed:
-        backgroundColor = Colors.green.withOpacity(0.1);
+        backgroundColor = Colors.green.withValues(alpha: 0.1);
         textColor = Colors.green;
         iconData = Icons.check_circle;
         break;
       case TransferStatus.failed:
-        backgroundColor = Colors.red.withOpacity(0.1);
+        backgroundColor = Colors.red.withValues(alpha: 0.1);
         textColor = Colors.red;
         iconData = Icons.error;
         break;
       case TransferStatus.cancelled:
-        backgroundColor = Colors.grey.withOpacity(0.1);
+        backgroundColor = Colors.grey.withValues(alpha: 0.1);
         textColor = Colors.grey;
         iconData = Icons.cancel;
         break;
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(12),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            backgroundColor,
+            backgroundColor.withValues(alpha: 0.7),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: textColor.withValues(alpha: 0.3),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: textColor.withValues(alpha: 0.2),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(iconData, size: 14, color: textColor),
-          const SizedBox(width: 4),
+          Icon(iconData, size: 16, color: textColor),
+          const SizedBox(width: 6),
           Text(
             transfer.status.displayName,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 13,
               color: textColor,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.3,
             ),
           ),
         ],
@@ -231,11 +278,21 @@ class TransferProgressWidget extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 4),
-        LinearProgressIndicator(
-          value: transfer.progress,
-          backgroundColor: Colors.grey.withOpacity(0.2),
-          valueColor: AlwaysStoppedAnimation<Color>(
-            _getProgressColor(),
+        Container(
+          height: 8,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            color: Colors.grey.withValues(alpha: 0.2),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: transfer.progress,
+              backgroundColor: Colors.transparent,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                _getProgressColor(),
+              ),
+            ),
           ),
         ),
       ],

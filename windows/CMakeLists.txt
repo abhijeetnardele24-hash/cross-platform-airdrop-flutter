@@ -1,5 +1,5 @@
 # Project-level configuration.
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.14...3.25)
 project(runner LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
@@ -31,6 +31,10 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
+
+# Add /FS flag to allow parallel PDB writes
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /FS")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /FS")
 
 # Compilation settings that should be applied to most targets.
 #

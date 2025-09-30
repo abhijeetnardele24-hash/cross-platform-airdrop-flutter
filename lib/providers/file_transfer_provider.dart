@@ -5,29 +5,110 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:path/path.dart' as path;
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/device_model.dart';
 import '../models/transfer_model.dart';
+import 'device_provider.dart';
 
 class FileTransferProvider extends ChangeNotifier {
+  final StreamController<Map<String, dynamic>> _incomingFileController =
+      StreamController.broadcast();
+
+  Stream<Map<String, dynamic>> get incomingFiles =>
+      _incomingFileController.stream;
+
+  // Call this to connect to DeviceProvider's file available callback
+  void bindToDeviceProvider(DeviceProvider deviceProvider) {
+    deviceProvider.onFileAvailable = (file) {
+      _handleIncomingFileNotification(file);
+    };
+  }
+
+  void _handleIncomingFileNotification(Map<String, dynamic> file) async {
+    // Create a new TransferModel for the incoming file
+    final fromDevice =
+        DeviceModel.fromJson(file['fromDevice'] as Map<String, dynamic>);
+    final toDevice =
+        DeviceModel.fromJson(file['toDevice'] as Map<String, dynamic>);
+    final transfer = TransferModel(
+      id: file['id'] as String? ?? _uuid.v4(),
+      fileName: file['fileName'] as String,
+      filePath: '', // Will be set after download
+      fileSize: file['fileSize'] as int? ?? 0,
+      mimeType: file['mimeType'] as String? ?? 'application/octet-stream',
+      fromDevice: fromDevice,
+      toDevice: toDevice,
+      status: TransferStatus.pending,
+      direction: TransferDirection.receive,
+      startTime: DateTime.now(),
+    );
+    _transfers.add(transfer);
+    notifyListeners();
+    // Optionally notify UI
+    _incomingFileController.add(file);
+    // Start download automatically (or let UI trigger)
+    await _downloadIncomingFile(transfer);
+  }
+
+  Future<void> _downloadIncomingFile(TransferModel transfer) async {
+    try {
+      _updateTransferStatus(transfer.id, TransferStatus.transferring);
+      final dio = Dio();
+      final base = DeviceProvider.httpBase;
+      final url = '$base/files/${Uri.encodeComponent(transfer.fileName)}';
+      final dir = await getDownloadsDirectory() ??
+          await getApplicationDocumentsDirectory();
+      final savePath = path.join(dir.path, transfer.fileName);
+      await dio.download(url, savePath, onReceiveProgress: (received, total) {
+        final totalBytes = total > 0 ? total : transfer.fileSize;
+        _updateTransferProgress(
+          transfer.id,
+          received,
+          received / (totalBytes == 0 ? 1 : totalBytes),
+        );
+      });
+      // Update filePath and mark as completed
+      final idx = _transfers.indexWhere((t) => t.id == transfer.id);
+      if (idx != -1) {
+        _transfers[idx] = _transfers[idx].copyWith(
+          filePath: savePath,
+          status: TransferStatus.completed,
+          endTime: DateTime.now(),
+          progress: 1.0,
+        );
+        // Move to history
+        _transferHistory.insert(0, _transfers[idx]);
+        notifyListeners();
+        _saveTransferHistory();
+      }
+    } catch (e) {
+      _updateTransferStatus(transfer.id, TransferStatus.failed,
+          errorMessage: e.toString());
+    }
+  }
+
   final List<TransferModel> _transfers = [];
   final List<TransferModel> _transferHistory = [];
   final Map<String, Timer> _transferTimers = {};
   final Map<String, StreamSubscription> _transferSubscriptions = {};
   final Uuid _uuid = const Uuid();
-  
+
   // Connection management
   final Map<String, bool> _activeConnections = {};
   bool _isInitialized = false;
 
   List<TransferModel> get transfers => List.unmodifiable(_transfers);
-  List<TransferModel> get transferHistory => List.unmodifiable(_transferHistory);
-  List<TransferModel> get activeTransfers => _transfers.where((t) => t.status.isActive).toList();
+  List<TransferModel> get transferHistory =>
+      List.unmodifiable(_transferHistory);
+  List<TransferModel> get activeTransfers =>
+      _transfers.where((t) => t.status.isActive).toList();
   bool get isInitialized => _isInitialized;
 
   Future<void> initialize() async {
     if (_isInitialized) return;
-    
+
     try {
       await _loadTransferHistory();
       _isInitialized = true;
@@ -37,13 +118,18 @@ class FileTransferProvider extends ChangeNotifier {
     }
   }
 
+  // Call this after providers are created
+  void setupIncomingFileListener(DeviceProvider deviceProvider) {
+    bindToDeviceProvider(deviceProvider);
+  }
+
   Future<void> _loadTransferHistory() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final historyJson = prefs.getStringList('transfer_history') ?? [];
-      
+
       _transferHistory.clear();
-      
+
       for (final jsonString in historyJson) {
         try {
           final Map<String, dynamic> jsonMap = jsonDecode(jsonString);
@@ -54,10 +140,10 @@ class FileTransferProvider extends ChangeNotifier {
           // Continue with other items instead of failing completely
         }
       }
-      
+
       // Sort by most recent first
-      _transferHistory.sort((a, b) => (b.startTime ?? DateTime.now()).compareTo(a.startTime ?? DateTime.now()));
-      
+      _transferHistory.sort((a, b) => (b.startTime ?? DateTime.now())
+          .compareTo(a.startTime ?? DateTime.now()));
     } catch (e) {
       debugPrint('Error loading transfer history: $e');
       // Don't rethrow - app should continue working even if history fails to load
@@ -67,16 +153,13 @@ class FileTransferProvider extends ChangeNotifier {
   Future<void> _saveTransferHistory() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
+
       // Keep only the most recent 100 transfers and ensure they're not null
-      final validHistory = _transferHistory
-          .where((t) => t.id.isNotEmpty)
-          .take(100)
-          .toList();
-      
-      final historyJson = validHistory
-          .map((t) => jsonEncode(t.toJson()))
-          .toList();
+      final validHistory =
+          _transferHistory.where((t) => t.id.isNotEmpty).take(100).toList();
+
+      final historyJson =
+          validHistory.map((t) => jsonEncode(t.toJson())).toList();
 
       await prefs.setStringList('transfer_history', historyJson);
     } catch (e) {
@@ -94,7 +177,7 @@ class FileTransferProvider extends ChangeNotifier {
     if (filePath.isEmpty) {
       throw ArgumentError('File path cannot be empty');
     }
-    
+
     final file = File(filePath);
     if (!await file.exists()) {
       throw FileSystemException('File does not exist', filePath);
@@ -127,60 +210,15 @@ class FileTransferProvider extends ChangeNotifier {
     _transfers.add(transfer);
     notifyListeners();
 
-    // Start the transfer process asynchronously
-    unawaited(_initiateTransfer(transfer));
+    // Start the transfer process (real upload)
+    _uploadFile(transfer);
 
     return transfer;
   }
 
   Future<void> _initiateTransfer(TransferModel transfer) async {
-    try {
-      // Check if transfer was cancelled before starting
-      final currentTransfer = _getTransferById(transfer.id);
-      if (currentTransfer?.status == TransferStatus.cancelled) {
-        return;
-      }
-
-      // Update status to connecting
-      _updateTransferStatus(transfer.id, TransferStatus.connecting);
-
-      // Simulate connection establishment with timeout
-      final connectionFuture = _establishConnection(transfer);
-      final timeoutFuture = Future.delayed(
-        const Duration(seconds: 10),
-        () => throw TimeoutException('Connection timeout', const Duration(seconds: 10)),
-      );
-
-      await Future.any([connectionFuture, timeoutFuture]);
-
-      // Check again if transfer was cancelled during connection
-      final updatedTransfer = _getTransferById(transfer.id);
-      if (updatedTransfer?.status == TransferStatus.cancelled) {
-        return;
-      }
-
-      // Start the actual transfer
-      await _performTransfer(transfer);
-      
-    } catch (e) {
-      String errorMessage = 'Transfer failed: ${e.toString()}';
-      
-      if (e is TimeoutException) {
-        errorMessage = 'Connection timeout';
-      } else if (e is FileSystemException) {
-        errorMessage = 'File access error: ${e.message}';
-      }
-      
-      _updateTransferStatus(transfer.id, TransferStatus.failed, errorMessage: errorMessage);
-    }
-  }
-
-  Future<void> _establishConnection(TransferModel transfer) async {
-    // Simulate connection delay with some variability
-    final connectionTime = 1000 + Random().nextInt(2000); // 1-3 seconds
-    await Future.delayed(Duration(milliseconds: connectionTime));
-    
-    _activeConnections[transfer.id] = true;
+    // Start the transfer process asynchronously
+    unawaited(_performTransfer(transfer));
   }
 
   Future<void> _performTransfer(TransferModel transfer) async {
@@ -189,8 +227,9 @@ class FileTransferProvider extends ChangeNotifier {
 
       // Dynamic transfer speed based on file size
       final baseSpeed = _calculateTransferSpeed(transfer.fileSize);
-      const updateInterval = Duration(milliseconds: 100);
-      final bytesPerUpdate = (baseSpeed * updateInterval.inMilliseconds / 1000).round();
+      const updateInterval = const Duration(milliseconds: 100);
+      final bytesPerUpdate =
+          (baseSpeed * updateInterval.inMilliseconds / 1000).round();
 
       _transferTimers[transfer.id] = Timer.periodic(updateInterval, (timer) {
         final currentTransfer = _getTransferById(transfer.id);
@@ -201,8 +240,10 @@ class FileTransferProvider extends ChangeNotifier {
         }
 
         // Add some randomness to simulate real network conditions
-        final randomVariation = Random().nextDouble() * 0.3 + 0.85; // 85%-115% of base speed
-        final adjustedBytesPerUpdate = (bytesPerUpdate * randomVariation).round();
+        final randomVariation =
+            Random().nextDouble() * 0.3 + 0.85; // 85%-115% of base speed
+        final adjustedBytesPerUpdate =
+            (bytesPerUpdate * randomVariation).round();
 
         final newBytesTransferred = min(
           currentTransfer.bytesTransferred + adjustedBytesPerUpdate,
@@ -220,26 +261,69 @@ class FileTransferProvider extends ChangeNotifier {
           _completeTransfer(transfer.id);
         }
       });
-
     } catch (e) {
-      _updateTransferStatus(transfer.id, TransferStatus.failed, errorMessage: e.toString());
+      _updateTransferStatus(transfer.id, TransferStatus.failed,
+          errorMessage: e.toString());
+    }
+  }
+
+  Future<void> _uploadFile(TransferModel transfer) async {
+    try {
+      _updateTransferStatus(transfer.id, TransferStatus.transferring);
+      final dio = Dio();
+      final formData = FormData.fromMap({
+        'file': await MultipartFile.fromFile(transfer.filePath,
+            filename: transfer.fileName),
+      });
+
+      final toId = transfer.toDevice.id;
+      final fromId = transfer.fromDevice.id;
+      final base = DeviceProvider.httpBase; // static getter
+      final url = '$base/upload/$toId?from=$fromId';
+
+      await dio.post(url,
+          data: formData, options: Options(contentType: 'multipart/form-data'),
+          onSendProgress: (sent, total) {
+        final totalBytes = total > 0 ? total : transfer.fileSize;
+        _updateTransferProgress(
+            transfer.id, sent, sent / (totalBytes == 0 ? 1 : totalBytes));
+      });
+
+      _completeTransfer(transfer.id);
+    } catch (e) {
+      _updateTransferStatus(transfer.id, TransferStatus.failed,
+          errorMessage: e.toString());
     }
   }
 
   int _calculateTransferSpeed(int fileSize) {
     // Simulate different speeds based on file size (bytes per second)
-    if (fileSize < 1024 * 1024) { // < 1MB
+    if (fileSize < 1024 * 1024) {
+      // < 1MB
       return 1024 * 500; // 500KB/s
-    } else if (fileSize < 10 * 1024 * 1024) { // < 10MB
+    } else if (fileSize < 10 * 1024 * 1024) {
+      // < 10MB
       return 1024 * 1024; // 1MB/s
-    } else if (fileSize < 100 * 1024 * 1024) { // < 100MB
+    } else if (fileSize < 100 * 1024 * 1024) {
+      // < 100MB
       return 1024 * 1024 * 2; // 2MB/s
     } else {
       return 1024 * 1024 * 5; // 5MB/s for large files
     }
   }
 
-  void _updateTransferStatus(String transferId, TransferStatus status, {String? errorMessage}) {
+  Future<String> downloadFile(String fileName, String relativeUrl) async {
+    final base = DeviceProvider.httpBase;
+    final dio = Dio();
+    final dir = await getDownloadsDirectory() ??
+        await getApplicationDocumentsDirectory();
+    final savePath = path.join(dir.path, fileName);
+    await dio.download(base + relativeUrl, savePath);
+    return savePath;
+  }
+
+  void _updateTransferStatus(String transferId, TransferStatus status,
+      {String? errorMessage}) {
     final index = _transfers.indexWhere((t) => t.id == transferId);
     if (index != -1) {
       _transfers[index] = _transfers[index].copyWith(
@@ -250,12 +334,14 @@ class FileTransferProvider extends ChangeNotifier {
     }
   }
 
-  void _updateTransferProgress(String transferId, int bytesTransferred, double progress) {
+  void _updateTransferProgress(
+      String transferId, int bytesTransferred, double progress) {
     final index = _transfers.indexWhere((t) => t.id == transferId);
     if (index != -1) {
       _transfers[index] = _transfers[index].copyWith(
         bytesTransferred: bytesTransferred,
-        progress: progress.clamp(0.0, 1.0), // Ensure progress is always between 0 and 1
+        progress: progress.clamp(
+            0.0, 1.0), // Ensure progress is always between 0 and 1
       );
       notifyListeners();
     }
@@ -274,13 +360,13 @@ class FileTransferProvider extends ChangeNotifier {
 
       // Move to history (insert at beginning for most recent first)
       _transferHistory.insert(0, completedTransfer);
-      
+
       // Clean up resources
       _cleanupTransfer(transferId);
-      
+
       // Save history asynchronously
       unawaited(_saveTransferHistory());
-      
+
       notifyListeners();
     }
   }
@@ -327,9 +413,10 @@ class FileTransferProvider extends ChangeNotifier {
       _updateTransferStatus(transferId, TransferStatus.cancelled);
 
       // Move to history
-      final cancelledTransfer = _transfers.firstWhere((t) => t.id == transferId);
+      final cancelledTransfer =
+          _transfers.firstWhere((t) => t.id == transferId);
       _transferHistory.insert(0, cancelledTransfer);
-      
+
       unawaited(_saveTransferHistory());
       return true;
     }
@@ -378,21 +465,23 @@ class FileTransferProvider extends ChangeNotifier {
   }
 
   void clearCompletedTransfers() {
-    final toRemove = _transfers.where((t) =>
-        t.status == TransferStatus.completed ||
-        t.status == TransferStatus.cancelled ||
-        t.status == TransferStatus.failed).toList();
-    
+    final toRemove = _transfers
+        .where((t) =>
+            t.status == TransferStatus.completed ||
+            t.status == TransferStatus.cancelled ||
+            t.status == TransferStatus.failed)
+        .toList();
+
     // Clean up resources for removed transfers
     for (final transfer in toRemove) {
       _cleanupTransfer(transfer.id);
     }
-    
+
     _transfers.removeWhere((t) =>
         t.status == TransferStatus.completed ||
         t.status == TransferStatus.cancelled ||
         t.status == TransferStatus.failed);
-    
+
     notifyListeners();
   }
 
@@ -409,11 +498,14 @@ class FileTransferProvider extends ChangeNotifier {
       '.svg': 'image/svg+xml',
       '.pdf': 'application/pdf',
       '.doc': 'application/msword',
-      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      '.docx':
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       '.xls': 'application/vnd.ms-excel',
-      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      '.xlsx':
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       '.ppt': 'application/vnd.ms-powerpoint',
-      '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      '.pptx':
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       '.txt': 'text/plain',
       '.html': 'text/html',
       '.css': 'text/css',
@@ -444,7 +536,9 @@ class FileTransferProvider extends ChangeNotifier {
   int get totalTransfers => _transferHistory.length + _transfers.length;
 
   int get completedTransfers =>
-      _transferHistory.where((t) => t.status == TransferStatus.completed).length +
+      _transferHistory
+          .where((t) => t.status == TransferStatus.completed)
+          .length +
       _transfers.where((t) => t.status == TransferStatus.completed).length;
 
   int get failedTransfers =>
@@ -452,7 +546,9 @@ class FileTransferProvider extends ChangeNotifier {
       _transfers.where((t) => t.status == TransferStatus.failed).length;
 
   int get cancelledTransfers =>
-      _transferHistory.where((t) => t.status == TransferStatus.cancelled).length +
+      _transferHistory
+          .where((t) => t.status == TransferStatus.cancelled)
+          .length +
       _transfers.where((t) => t.status == TransferStatus.cancelled).length;
 
   double get successRate {
@@ -462,32 +558,32 @@ class FileTransferProvider extends ChangeNotifier {
 
   int get totalBytesTransferred {
     int total = 0;
-    
+
     for (final transfer in _transferHistory) {
       if (transfer.status == TransferStatus.completed) {
         total += transfer.fileSize;
       }
     }
-    
+
     for (final transfer in _transfers) {
       if (transfer.status == TransferStatus.completed) {
         total += transfer.fileSize;
       }
     }
-    
+
     return total;
   }
 
   // Get average transfer speed
   double get averageTransferSpeed {
     final completedList = [
-      ..._transferHistory.where((t) => 
-          t.status == TransferStatus.completed && 
-          t.startTime != null && 
+      ..._transferHistory.where((t) =>
+          t.status == TransferStatus.completed &&
+          t.startTime != null &&
           t.endTime != null),
-      ..._transfers.where((t) => 
-          t.status == TransferStatus.completed && 
-          t.startTime != null && 
+      ..._transfers.where((t) =>
+          t.status == TransferStatus.completed &&
+          t.startTime != null &&
           t.endTime != null),
     ];
 
@@ -497,9 +593,11 @@ class FileTransferProvider extends ChangeNotifier {
     int validTransfers = 0;
 
     for (final transfer in completedList) {
-      final duration = transfer.endTime!.difference(transfer.startTime!).inMilliseconds;
+      final duration =
+          transfer.endTime!.difference(transfer.startTime!).inMilliseconds;
       if (duration > 0) {
-        final speed = transfer.fileSize / (duration / 1000.0); // bytes per second
+        final speed =
+            transfer.fileSize / (duration / 1000.0); // bytes per second
         totalSpeed += speed;
         validTransfers++;
       }
@@ -511,16 +609,18 @@ class FileTransferProvider extends ChangeNotifier {
   // Get current transfer speed for active transfers
   Map<String, double> get currentTransferSpeeds {
     final speeds = <String, double>{};
-    
-    for (final transfer in _transfers.where((t) => t.status == TransferStatus.transferring)) {
+
+    for (final transfer
+        in _transfers.where((t) => t.status == TransferStatus.transferring)) {
       if (transfer.startTime != null && transfer.bytesTransferred > 0) {
-        final elapsed = DateTime.now().difference(transfer.startTime!).inMilliseconds;
+        final elapsed =
+            DateTime.now().difference(transfer.startTime!).inMilliseconds;
         if (elapsed > 0) {
           speeds[transfer.id] = transfer.bytesTransferred / (elapsed / 1000.0);
         }
       }
     }
-    
+
     return speeds;
   }
 
@@ -530,11 +630,11 @@ class FileTransferProvider extends ChangeNotifier {
     for (final transferId in _transferTimers.keys.toList()) {
       _cleanupTransfer(transferId);
     }
-    
+
     _transfers.clear();
     _transferHistory.clear();
     _activeConnections.clear();
-    
+
     super.dispose();
   }
 }

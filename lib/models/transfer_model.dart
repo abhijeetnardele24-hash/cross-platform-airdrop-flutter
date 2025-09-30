@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'device_model.dart';
 
 class TransferModel {
@@ -15,6 +16,15 @@ class TransferModel {
   final int bytesTransferred;
   final double progress;
   final String? errorMessage;
+  final TransferError? error;
+  final int retryCount;
+  final DateTime? lastRetryTime;
+  final bool isPaused;
+  final int priority; // 0: low, 1: normal, 2: high
+  final int queuePosition;
+
+  final String? checksum;
+  final bool isEncrypted;
 
   const TransferModel({
     required this.id,
@@ -31,17 +41,45 @@ class TransferModel {
     this.bytesTransferred = 0,
     this.progress = 0.0,
     this.errorMessage,
+    this.error,
+    this.retryCount = 0,
+    this.lastRetryTime,
+    this.isPaused = false,
+    this.priority = 1,
+    this.queuePosition = 0,
+    this.checksum,
+    this.isEncrypted = true,
   });
 
   factory TransferModel.fromJson(Map<String, dynamic> json) {
     return TransferModel(
-      id: json['id'] as String,
-      fileName: json['fileName'] as String,
-      filePath: json['filePath'] as String,
-      fileSize: json['fileSize'] as int,
-      mimeType: json['mimeType'] as String,
-      fromDevice: DeviceModel.fromJson(json['fromDevice'] as Map<String, dynamic>),
-      toDevice: DeviceModel.fromJson(json['toDevice'] as Map<String, dynamic>),
+      id: json['id'] as String? ?? '',
+      fileName: json['fileName'] as String? ?? '',
+      filePath: json['filePath'] as String? ?? '',
+      fileSize: json['fileSize'] as int? ?? 0,
+      mimeType: json['mimeType'] as String? ?? 'application/octet-stream',
+      fromDevice: json['fromDevice'] != null
+          ? (json['fromDevice'] is Map<String, dynamic>
+              ? DeviceModel.fromJson(json['fromDevice'] as Map<String, dynamic>)
+              : DeviceModel.fromJson(jsonDecode(json['fromDevice'] as String)
+                  as Map<String, dynamic>))
+          : DeviceModel(
+              id: '',
+              name: '',
+              ipAddress: '',
+              type: DeviceType.unknown,
+              lastSeen: DateTime.now()),
+      toDevice: json['toDevice'] != null
+          ? (json['toDevice'] is Map<String, dynamic>
+              ? DeviceModel.fromJson(json['toDevice'] as Map<String, dynamic>)
+              : DeviceModel.fromJson(jsonDecode(json['toDevice'] as String)
+                  as Map<String, dynamic>))
+          : DeviceModel(
+              id: '',
+              name: '',
+              ipAddress: '',
+              type: DeviceType.unknown,
+              lastSeen: DateTime.now()),
       status: TransferStatus.values.firstWhere(
         (e) => e.toString().split('.').last == json['status'],
         orElse: () => TransferStatus.pending,
@@ -50,11 +88,17 @@ class TransferModel {
         (e) => e.toString().split('.').last == json['direction'],
         orElse: () => TransferDirection.send,
       ),
-      startTime: DateTime.parse(json['startTime'] as String),
-      endTime: json['endTime'] != null ? DateTime.parse(json['endTime'] as String) : null,
+      startTime: json['startTime'] != null
+          ? DateTime.parse(json['startTime'] as String)
+          : DateTime.now(),
+      endTime: json['endTime'] != null
+          ? DateTime.parse(json['endTime'] as String)
+          : null,
       bytesTransferred: json['bytesTransferred'] as int? ?? 0,
       progress: (json['progress'] as num?)?.toDouble() ?? 0.0,
       errorMessage: json['errorMessage'] as String?,
+      checksum: json['checksum'] as String?,
+      isEncrypted: json['isEncrypted'] as bool? ?? true,
     );
   }
 
@@ -74,6 +118,8 @@ class TransferModel {
       'bytesTransferred': bytesTransferred,
       'progress': progress,
       'errorMessage': errorMessage,
+      'checksum': checksum,
+      'isEncrypted': isEncrypted,
     };
   }
 
@@ -92,6 +138,14 @@ class TransferModel {
     int? bytesTransferred,
     double? progress,
     String? errorMessage,
+    TransferError? error,
+    int? retryCount,
+    DateTime? lastRetryTime,
+    bool? isPaused,
+    int? priority,
+    int? queuePosition,
+    String? checksum,
+    bool? isEncrypted,
   }) {
     return TransferModel(
       id: id ?? this.id,
@@ -108,6 +162,14 @@ class TransferModel {
       bytesTransferred: bytesTransferred ?? this.bytesTransferred,
       progress: progress ?? this.progress,
       errorMessage: errorMessage ?? this.errorMessage,
+      error: error ?? this.error,
+      retryCount: retryCount ?? this.retryCount,
+      lastRetryTime: lastRetryTime ?? this.lastRetryTime,
+      isPaused: isPaused ?? this.isPaused,
+      priority: priority ?? this.priority,
+      queuePosition: queuePosition ?? this.queuePosition,
+      checksum: checksum ?? this.checksum,
+      isEncrypted: isEncrypted ?? this.isEncrypted,
     );
   }
 
@@ -119,10 +181,16 @@ class TransferModel {
   }
 
   String get formattedFileSize {
-    if (fileSize < 1024) return '$fileSize B';
-    if (fileSize < 1024 * 1024) return '${(fileSize / 1024).toStringAsFixed(1)} KB';
-    if (fileSize < 1024 * 1024 * 1024) return '${(fileSize / (1024 * 1024)).toStringAsFixed(1)} MB';
-    return '${(fileSize / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+    if (fileSize < 1024) {
+      return '$fileSize B';
+    }
+    if (fileSize < 1024 * 1024) {
+      return '${(fileSize / 1024).toStringAsFixed(2)} KB';
+    }
+    if (fileSize < 1024 * 1024 * 1024) {
+      return '${(fileSize / (1024 * 1024)).toStringAsFixed(2)} MB';
+    }
+    return '${(fileSize / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
   double get transferSpeed {
@@ -169,6 +237,50 @@ enum TransferDirection {
   receive,
 }
 
+enum TransferError {
+  networkError,
+  deviceDisconnected,
+  fileNotFound,
+  permissionDenied,
+  storageFull,
+  checksumMismatch,
+  encryptionError,
+  timeout,
+  unknown,
+}
+
+extension TransferErrorExtension on TransferError {
+  String get displayMessage {
+    switch (this) {
+      case TransferError.networkError:
+        return 'Network connection lost. Please check your internet connection.';
+      case TransferError.deviceDisconnected:
+        return 'Device disconnected unexpectedly. Please try again.';
+      case TransferError.fileNotFound:
+        return 'File not found. Please check if the file exists.';
+      case TransferError.permissionDenied:
+        return 'Permission denied. Please check file permissions.';
+      case TransferError.storageFull:
+        return 'Storage is full. Please free up space.';
+      case TransferError.checksumMismatch:
+        return 'File integrity check failed. The file may be corrupted.';
+      case TransferError.encryptionError:
+        return 'Encryption error occurred. Please try again.';
+      case TransferError.timeout:
+        return 'Connection timed out. Please try again.';
+      case TransferError.unknown:
+        return 'An unknown error occurred. Please try again.';
+    }
+  }
+
+  bool get isRetryable {
+    return this == TransferError.networkError ||
+        this == TransferError.deviceDisconnected ||
+        this == TransferError.timeout ||
+        this == TransferError.encryptionError;
+  }
+}
+
 extension TransferStatusExtension on TransferStatus {
   String get displayName {
     switch (this) {
@@ -190,8 +302,8 @@ extension TransferStatusExtension on TransferStatus {
   }
 
   bool get isActive {
-    return this == TransferStatus.connecting || 
-           this == TransferStatus.transferring;
+    return this == TransferStatus.connecting ||
+        this == TransferStatus.transferring;
   }
 
   bool get canResume {
@@ -203,7 +315,6 @@ extension TransferStatusExtension on TransferStatus {
   }
 
   bool get canCancel {
-    return this != TransferStatus.completed && 
-           this != TransferStatus.cancelled;
+    return this != TransferStatus.completed && this != TransferStatus.cancelled;
   }
 }
