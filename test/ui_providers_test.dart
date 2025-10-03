@@ -12,7 +12,7 @@ import 'package:cross_platform_airdrop/providers/file_transfer_provider.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('Main UI Tests', () {
+  group('UI Providers Tests', () {
     late ThemeProvider themeProvider;
     late LocaleProvider localeProvider;
     late DeviceProvider deviceProvider;
@@ -35,29 +35,6 @@ void main() {
 
       // Verify splash screen is shown initially
       expect(find.text('AirDrop'), findsOneWidget);
-      expect(find.text('Share Files Instantly'), findsOneWidget);
-    });
-
-    testWidgets('Splash screen displays correctly', (WidgetTester tester) async {
-      await tester.pumpWidget(
-        MultiProvider(
-          providers: [
-            ChangeNotifierProvider<ThemeProvider>.value(value: themeProvider),
-            ChangeNotifierProvider<LocaleProvider>.value(value: localeProvider),
-            ChangeNotifierProvider<DeviceProvider>.value(value: deviceProvider),
-            ChangeNotifierProvider<RoomProvider>.value(value: roomProvider),
-            ChangeNotifierProvider<TransferProvider>.value(value: transferProvider),
-            ChangeNotifierProvider<FileTransferProvider>.value(value: fileTransferProvider),
-          ],
-          child: const MyApp(),
-        ),
-      );
-
-      await tester.pump();
-
-      // Check for splash screen elements
-      expect(find.text('AirDrop'), findsOneWidget);
-      expect(find.text('File Sharing Reimagined'), findsOneWidget);
     });
 
     testWidgets('Theme provider works correctly', (WidgetTester tester) async {
@@ -108,26 +85,7 @@ void main() {
       expect(find.text('No Device'), findsOneWidget);
     });
 
-    testWidgets('Locale provider works', (WidgetTester tester) async {
-      await tester.pumpWidget(
-        ChangeNotifierProvider<LocaleProvider>.value(
-          value: localeProvider,
-          child: MaterialApp(
-            home: Consumer<LocaleProvider>(
-              builder: (context, provider, child) {
-                return Scaffold(
-                  body: Text(provider.locale.languageCode),
-                );
-              },
-            ),
-          ),
-        ),
-      );
-
-      expect(find.text('en'), findsOneWidget);
-    });
-
-    testWidgets('Room provider initializes', (WidgetTester tester) async {
+    testWidgets('Room provider works', (WidgetTester tester) async {
       await tester.pumpWidget(
         ChangeNotifierProvider<RoomProvider>.value(
           value: roomProvider,

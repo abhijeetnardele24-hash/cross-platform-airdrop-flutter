@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:haptic_feedback/haptic_feedback.dart';
+import 'package:flutter/services.dart';
 
 /// iOS-style bottom sheet with blur effect
 class IOSBottomSheet {
@@ -13,7 +13,7 @@ class IOSBottomSheet {
     double? height,
     bool enableDrag = true,
   }) async {
-    await Haptics.vibrate(HapticsType.selection);
+    await HapticFeedback.lightImpact();
     
     return showCupertinoModalPopup<T>(
       context: context,
@@ -54,7 +54,7 @@ class IOSBottomSheet {
     required List<IOSActionSheetAction> actions,
     IOSActionSheetAction? cancelAction,
   }) async {
-    await Haptics.vibrate(HapticsType.selection);
+    await HapticFeedback.lightImpact();
     
     return showCupertinoModalPopup<T>(
       context: context,
@@ -65,7 +65,7 @@ class IOSBottomSheet {
           actions: actions.map((action) {
             return CupertinoActionSheetAction(
               onPressed: () {
-                Haptics.vibrate(HapticsType.selection);
+                HapticFeedback.lightImpact();
                 Navigator.pop(context);
                 action.onPressed();
               },
@@ -77,7 +77,7 @@ class IOSBottomSheet {
           cancelButton: cancelAction != null
               ? CupertinoActionSheetAction(
                   onPressed: () {
-                    Haptics.vibrate(HapticsType.selection);
+                    HapticFeedback.lightImpact();
                     Navigator.pop(context);
                     cancelAction.onPressed();
                   },
@@ -96,7 +96,7 @@ class IOSBottomSheet {
     String? title,
     VoidCallback? onDone,
   }) async {
-    await Haptics.vibrate(HapticsType.selection);
+    await HapticFeedback.lightImpact();
     
     return showCupertinoModalPopup<T>(
       context: context,
@@ -136,7 +136,7 @@ class IOSBottomSheet {
                     CupertinoButton(
                       padding: EdgeInsets.zero,
                       onPressed: () {
-                        Haptics.vibrate(HapticsType.selection);
+                        HapticFeedback.lightImpact();
                         onDone?.call();
                         Navigator.pop(context);
                       },
@@ -178,7 +178,7 @@ class IOSAlertDialog {
     String? message,
     List<IOSAlertAction>? actions,
   }) async {
-    await Haptics.vibrate(HapticsType.warning);
+    await HapticFeedback.mediumImpact();
     
     return showCupertinoDialog<T>(
       context: context,
@@ -189,7 +189,7 @@ class IOSAlertDialog {
           actions: actions?.map((action) {
             return CupertinoDialogAction(
               onPressed: () {
-                Haptics.vibrate(HapticsType.selection);
+                HapticFeedback.lightImpact();
                 Navigator.pop(context, action.value);
                 action.onPressed?.call();
               },
@@ -200,7 +200,7 @@ class IOSAlertDialog {
           }).toList() ?? [
             CupertinoDialogAction(
               onPressed: () {
-                Haptics.vibrate(HapticsType.selection);
+                HapticFeedback.lightImpact();
                 Navigator.pop(context);
               },
               child: const Text('OK'),
@@ -220,7 +220,7 @@ class IOSAlertDialog {
     String cancelLabel = 'Cancel',
     bool isDestructive = false,
   }) async {
-    await Haptics.vibrate(HapticsType.warning);
+    await HapticFeedback.mediumImpact();
     
     final result = await showCupertinoDialog<bool>(
       context: context,
@@ -231,14 +231,14 @@ class IOSAlertDialog {
           actions: [
             CupertinoDialogAction(
               onPressed: () {
-                Haptics.vibrate(HapticsType.selection);
+                HapticFeedback.lightImpact();
                 Navigator.pop(context, false);
               },
               child: Text(cancelLabel),
             ),
             CupertinoDialogAction(
               onPressed: () {
-                Haptics.vibrate(HapticsType.selection);
+                HapticFeedback.lightImpact();
                 Navigator.pop(context, true);
               },
               isDestructiveAction: isDestructive,
@@ -294,7 +294,7 @@ class IOSSegmentedControl<T extends Object> extends StatelessWidget {
       children: children,
       onValueChanged: (T? value) {
         if (value != null) {
-          Haptics.vibrate(HapticsType.selection);
+          HapticFeedback.lightImpact();
           onValueChanged?.call(value);
         }
       },
@@ -323,7 +323,7 @@ class IOSContextMenu extends StatelessWidget {
       actions: actions.map((action) {
         return CupertinoContextMenuAction(
           onPressed: () {
-            Haptics.vibrate(HapticsType.selection);
+            HapticFeedback.lightImpact();
             Navigator.pop(context);
             action.onPressed();
           },

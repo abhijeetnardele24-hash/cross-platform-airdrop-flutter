@@ -1,8 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
+import 'package:provider/provider.dart';
+import '../theme/ios_theme.dart';
+import '../providers/theme_provider.dart';
 
 class FilePickerWidget extends StatefulWidget {
   final Function(List<String>) onFilesSelected;
@@ -26,83 +30,44 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = themeProvider.brightness == Brightness.dark;
+    
+    return IOSCard(
+      isDark: isDark,
       margin: const EdgeInsets.symmetric(horizontal: 8),
-      height: 500,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFFFEFEFE), // warmWhite
-            Color(0xFFF8FAFC), // softGray
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildHeader(isDark),
+            const SizedBox(height: IOSTheme.spacing20),
+            _buildFileTypeButtons(isDark),
+            const SizedBox(height: IOSTheme.spacing20),
+            if (_selectedFiles.isNotEmpty) ...[
+              _buildSelectedFilesList(isDark),
+              const SizedBox(height: IOSTheme.spacing20),
+            ],
+            _buildActionButtons(isDark),
+            const SizedBox(height: IOSTheme.spacing20),
           ],
-        ),
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF1E3A8A).withValues(alpha: 0.12),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-            spreadRadius: 4,
-          ),
-          BoxShadow(
-            color: Colors.white.withValues(alpha: 0.9),
-            blurRadius: 24,
-            offset: const Offset(-12, -12),
-            spreadRadius: -12,
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildHeader(),
-                const SizedBox(height: 20),
-                _buildFileTypeButtons(),
-                const SizedBox(height: 20),
-                if (_selectedFiles.isNotEmpty) ...[
-                  _buildSelectedFilesList(),
-                  const SizedBox(height: 20),
-                ],
-                _buildActionButtons(),
-                const SizedBox(height: 20),
-              ],
-            ),
-          ),
         ),
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(bool isDark) {
     return Row(
       children: [
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Theme.of(context).primaryColor.withValues(alpha: 0.2),
-                Theme.of(context).primaryColor.withValues(alpha: 0.1),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: Theme.of(context).primaryColor.withValues(alpha: 0.2),
-              width: 1,
-            ),
+            color: IOSTheme.systemBlue.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(
             CupertinoIcons.share,
-            color: Theme.of(context).primaryColor,
+            color: IOSTheme.systemBlue,
             size: 28,
           ),
         ),
@@ -162,7 +127,7 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
     );
   }
 
-  Widget _buildFileTypeButtons() {
+  Widget _buildFileTypeButtons(bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -194,31 +159,31 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
           mainAxisSpacing: 12,
           children: [
             _buildFileTypeButton(
-              icon: Icons.photo_camera_rounded,
+              icon: CupertinoIcons.photo_camera,
               label: 'Photos',
               emoji: '📸',
-              color: const Color(0xFF1E3A8A), // royalBlue
+              color: IOSTheme.systemBlue,
               onPressed: () => _pickFiles(FileType.image),
             ),
             _buildFileTypeButton(
-              icon: Icons.videocam_rounded,
+              icon: CupertinoIcons.videocam,
               label: 'Videos',
               emoji: '🎥',
-              color: const Color(0xFFDC2626), // crimsonRed
+              color: IOSTheme.systemRed,
               onPressed: () => _pickFiles(FileType.video),
             ),
             _buildFileTypeButton(
-              icon: Icons.music_note_rounded,
+              icon: CupertinoIcons.music_note,
               label: 'Audio',
               emoji: '🎵',
-              color: const Color(0xFFD97706), // goldenAmber
+              color: IOSTheme.systemOrange,
               onPressed: () => _pickFiles(FileType.audio),
             ),
             _buildFileTypeButton(
-              icon: Icons.description_rounded,
+              icon: CupertinoIcons.doc_text,
               label: 'Documents',
               emoji: '📄',
-              color: const Color(0xFF059669), // emeraldGreen
+              color: IOSTheme.systemGreen,
               onPressed: () =>
                   _pickFiles(FileType.custom, ['pdf', 'doc', 'docx', 'txt']),
             ),
@@ -226,10 +191,10 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
         ),
         const SizedBox(height: 12),
         _buildFileTypeButton(
-          icon: Icons.folder_open_rounded,
+          icon: CupertinoIcons.folder,
           label: 'Browse All Files',
           emoji: '📁',
-          color: const Color(0xFF7C3AED), // deepPurple
+          color: IOSTheme.systemPurple,
           onPressed: () => _pickFiles(FileType.any),
           isFullWidth: true,
         ),
@@ -317,7 +282,7 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
     );
   }
 
-  Widget _buildSelectedFilesList() {
+  Widget _buildSelectedFilesList(bool isDark) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -455,7 +420,7 @@ class _FilePickerWidgetState extends State<FilePickerWidget> {
     );
   }
 
-  Widget _buildActionButtons() {
+  Widget _buildActionButtons(bool isDark) {
     if (_selectedFiles.isEmpty) {
       return const SizedBox.shrink();
     }

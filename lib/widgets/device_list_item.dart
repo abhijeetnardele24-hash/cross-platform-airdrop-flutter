@@ -1,5 +1,8 @@
+import 'dart:ui';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import '../models/device_model.dart';
+import '../theme/ios_theme.dart';
 
 class DeviceListItem extends StatelessWidget {
   final DeviceModel device;
@@ -20,38 +23,46 @@ class DeviceListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = CupertinoTheme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
     return AnimatedContainer(
       duration: const Duration(milliseconds: 500),
       curve: Curves.easeOutCubic,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: IOSTheme.spacing16, vertical: IOSTheme.spacing8),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: isSelected
-            ? theme.primaryColor.withAlpha(26)
-            : theme.scaffoldBackgroundColor,
-        border: isSelected
-            ? Border.all(
-                color: theme.primaryColor.withAlpha(77),
-                width: 2,
-              )
-            : null,
-        boxShadow: [
-          if (isSelected)
-            BoxShadow(
-              color: theme.primaryColor.withAlpha(77),
-              blurRadius: 12,
-              offset: const Offset(0, 6),
-            ),
-        ],
+        borderRadius: BorderRadius.circular(IOSTheme.largeRadius),
+        gradient: isSelected 
+          ? IOSTheme.getGradient(IOSTheme.blueGradient)
+          : IOSTheme.dynamicGradient(isDark),
+        border: Border.all(
+          color: isSelected 
+            ? IOSTheme.systemBlue.withOpacity(0.3)
+            : Colors.white.withOpacity(isDark ? 0.1 : 0.2),
+          width: 0.5,
+        ),
+        boxShadow: isSelected 
+          ? IOSTheme.elevatedShadow
+          : IOSTheme.cardShadow(isDark),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: GestureDetector(
-          onTap: onTap,
-          onLongPress: onLongPress,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
+        borderRadius: BorderRadius.circular(IOSTheme.largeRadius),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: GestureDetector(
+            onTap: () {
+              IOSTheme.lightImpact();
+              onTap?.call();
+            },
+            onLongPress: () {
+              IOSTheme.mediumImpact();
+              onLongPress?.call();
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                color: IOSTheme.glassColor(isDark, opacity: 0.1),
+              ),
+              padding: const EdgeInsets.all(IOSTheme.spacing16),
+              child: Row(
               children: [
                 _buildDeviceIcon(),
                 const SizedBox(width: 16),
@@ -64,12 +75,11 @@ class DeviceListItem extends StatelessWidget {
                           Expanded(
                             child: Text(
                               device.name,
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                              style: IOSTheme.headline.copyWith(
                                 color: isSelected
-                                    ? theme.primaryColor
-                                    : theme.textTheme.textStyle.color,
+                                    ? Colors.white
+                                    : IOSTheme.primaryTextColor(isDark),
+                                fontWeight: FontWeight.w600,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -142,6 +152,7 @@ class DeviceListItem extends StatelessWidget {
                 _buildTrailingWidget(context),
               ],
             ),
+            ),
           ),
         ),
       ),
@@ -154,23 +165,16 @@ class DeviceListItem extends StatelessWidget {
       height: 64,
       decoration: BoxDecoration(
         gradient: device.isOnline
-            ? const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF059669), // emeraldGreen
-                  Color(0xFF047857), // darker emerald
-                ],
-              )
+            ? IOSTheme.getGradient(IOSTheme.greenGradient)
             : LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  const Color(0xFF475569), // slateGray
-                  const Color(0xFF334155), // darker slate
+                  IOSTheme.systemGray.withOpacity(0.8),
+                  IOSTheme.systemGray.withOpacity(0.6),
                 ],
               ),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(IOSTheme.largeRadius),
         boxShadow: [
           BoxShadow(
             color: device.isOnline

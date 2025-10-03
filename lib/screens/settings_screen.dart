@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,12 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../providers/theme_provider.dart';
 import '../providers/locale_provider.dart';
 import '../widgets/avatar_picker.dart';
-import '../utils/webrtc_test.dart';
-import '../utils/nearby_test.dart';
-import 'animation_test_screen.dart';
-import 'ios_components_test_screen.dart';
-import 'advanced_ui_test_screen.dart';
-import '../utils/page_transitions.dart';
+import '../theme/ios_theme.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -24,7 +18,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   File? _avatarFile;
-  String? _username;
+  String _username = '';
   late TextEditingController _usernameController;
   bool _notificationsEnabled = true;
   bool _autoAcceptFiles = false;
@@ -45,78 +39,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _username = prefs.getString('username');
-      _usernameController.text = _username ?? '';
-      _notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
-      _autoAcceptFiles = prefs.getBool('auto_accept_files') ?? false;
-      _saveToGallery = prefs.getBool('save_to_gallery') ?? true;
-      final avatarPath = prefs.getString('avatar_path');
-      if (avatarPath != null) {
-        _avatarFile = File(avatarPath);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _packageInfo = await PackageInfo.fromPlatform();
+      
+      if (mounted) {
+        setState(() {
+          _username = prefs.getString('username') ?? '';
+          _usernameController.text = _username;
+          _notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
+          _autoAcceptFiles = prefs.getBool('auto_accept_files') ?? false;
+          _saveToGallery = prefs.getBool('save_to_gallery') ?? true;
+          
+          final avatarPath = prefs.getString('avatar_path');
+          if (avatarPath != null && File(avatarPath).existsSync()) {
+            _avatarFile = File(avatarPath);
+          }
+        });
       }
-    });
-    _packageInfo = await PackageInfo.fromPlatform();
-    if (mounted) setState(() {});
-  }
-
-  void _saveAvatar(File? file) async {
-    final prefs = await SharedPreferences.getInstance();
-    if (file != null) {
-      await prefs.setString('avatar_path', file.path);
-    } else {
-      await prefs.remove('avatar_path');
-    }
-    if (mounted) {
-      setState(() {
-        _avatarFile = file;
-      });
+    } catch (e) {
+      debugPrint('Error loading settings: $e');
     }
   }
 
-  void _saveUsername(String value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('username', value);
-    if (mounted) {
-      setState(() {
-        _username = value;
-      });
+  Future<void> _saveAvatar(File? file) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (file != null) {
+        await prefs.setString('avatar_path', file.path);
+      } else {
+        await prefs.remove('avatar_path');
+      }
+      if (mounted) {
+        setState(() => _avatarFile = file);
+      }
+    } catch (e) {
+      debugPrint('Error saving avatar: $e');
     }
   }
 
-  void _savePreference(String key, bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(key, value);
+  Future<void> _saveUsername(String value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('username', value);
+      if (mounted) {
+        setState(() => _username = value);
+      }
+    } catch (e) {
+      debugPrint('Error saving username: $e');
+    }
   }
 
-  void _showAboutDialog() {
-    showCupertinoDialog(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('About Cross-Platform Airdrop'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 8),
-              Text('Version: ${_packageInfo?.version ?? '1.0.0'}'),
-              const SizedBox(height: 8),
-              const Text('A modern file sharing app for cross-platform devices.'),
-              const SizedBox(height: 8),
-              const Text('Developed by Team Narcos'),
-            ],
-          ),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('OK'),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ],
-      ),
-    );
+  Future<void> _savePreference(String key, bool value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(key, value);
+    } catch (e) {
+      debugPrint('Error saving preference: $e');
+    }
   }
 
   @override
@@ -126,437 +106,364 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final isDark = themeProvider.brightness == Brightness.dark;
 
     return CupertinoPageScaffold(
+      backgroundColor: IOSTheme.backgroundColor(isDark),
       navigationBar: CupertinoNavigationBar(
-        middle: const Text('Settings'),
+        backgroundColor: IOSTheme.cardColor(isDark).withValues(alpha: 0.9),
+        border: null,
+        middle: Text(
+          'Settings',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            color: IOSTheme.primaryTextColor(isDark),
+          ),
+        ),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () {
+            IOSTheme.lightImpact();
+            Navigator.pop(context);
+          },
+          child: Icon(
+            CupertinoIcons.back,
+            color: IOSTheme.systemBlue,
+            size: 22,
+          ),
+        ),
       ),
       child: SafeArea(
-        child: Material(
-          color: Colors.transparent,
-          child: ListView(
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            children: [
+        child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
             // Profile Section
-            _buildSection(
-              context,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        Semantics(
-                          label: 'Profile avatar, tap to change',
-                          child: Tooltip(
-                            message: 'Change your profile avatar',
-                            child: AvatarPicker(
-                              initialAvatar: _avatarFile,
-                              onAvatarChanged: _saveAvatar,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _username ?? 'Set your username',
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                _buildListTile(
-                  context: context,
-                  icon: Icons.person_outline,
-                  title: 'Username',
-                  trailing: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 150),
-                    child: TextField(
-                      controller: _usernameController,
-                      textAlign: TextAlign.right,
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        hintText: 'Enter name',
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(vertical: 8),
-                      ),
-                      onChanged: _saveUsername,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 35),
-
-            // Appearance Section
-            _buildSectionHeader(context, 'APPEARANCE'),
-            _buildSection(
-              context,
-              children: [
-                _buildSwitchTile(
-                  context: context,
-                  icon: isDark ? Icons.dark_mode : Icons.light_mode,
-                  title: 'Dark Mode',
-                  value: isDark,
-                  onChanged: (val) => themeProvider.toggleTheme(),
-                ),
-                _buildDivider(),
-                _buildListTile(
-                  context: context,
-                  icon: Icons.language,
-                  title: 'Language',
-                  trailing: defaultTargetPlatform == TargetPlatform.iOS
-                      ? GestureDetector(
-                          onTap: () async {
-                            Locale? selected = await showCupertinoModalPopup<Locale>(
-                              context: context,
-                              builder: (context) {
-                                int initialIndex = localeProvider.locale.languageCode == 'hi' ? 1 : 0;
-                                return Container(
-                                  height: 250,
-                                  color: CupertinoColors.systemBackground.resolveFrom(context),
-                                  child: CupertinoPicker(
-                                    scrollController: FixedExtentScrollController(initialItem: initialIndex),
-                                    itemExtent: 40,
-                                    onSelectedItemChanged: (i) {
-                                      final locale = [Locale('en'), Locale('hi')][i];
-                                      localeProvider.setLocale(locale);
-                                      Navigator.of(context).pop(locale);
-                                    },
-                                    children: const [
-                                      Center(child: Text('English')),
-                                      Center(child: Text('हिन्दी')),
-                                    ],
-                                  ),
-                                );
-                              },
-                            );
-                            if (selected != null) localeProvider.setLocale(selected);
-                          },
-                          child: Text(
-                            localeProvider.locale.languageCode == 'hi' ? 'हिन्दी' : 'English',
-                            style: TextStyle(
-                              color: Colors.blue,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        )
-                      : DropdownButton<Locale>(
-                          value: localeProvider.locale,
-                          underline: const SizedBox(),
-                          items: const [
-                            DropdownMenuItem(
-                              value: Locale('en'),
-                              child: Text('English'),
-                            ),
-                            DropdownMenuItem(
-                              value: Locale('hi'),
-                              child: Text('हिन्दी'),
-                            ),
-                          ],
-                          onChanged: (locale) {
-                            if (locale != null) {
-                              localeProvider.setLocale(locale);
-                            }
-                          },
-                        ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 35),
-
+            _buildProfileCard(isDark),
+            const SizedBox(height: 24),
+            
             // Preferences Section
-            _buildSectionHeader(context, 'PREFERENCES'),
-            _buildSection(
-              context,
-              children: [
-                _buildSwitchTile(
-                  context: context,
-                  icon: Icons.notifications_outlined,
-                  title: 'Notifications',
-                  subtitle: 'Receive transfer notifications',
-                  value: _notificationsEnabled,
-                  onChanged: (val) {
-                    setState(() => _notificationsEnabled = val);
-                    _savePreference('notifications_enabled', val);
-                  },
-                ),
-                _buildDivider(),
-                _buildSwitchTile(
-                  context: context,
-                  icon: Icons.download_outlined,
-                  title: 'Auto-accept Files',
-                  subtitle: 'Automatically accept incoming files',
-                  value: _autoAcceptFiles,
-                  onChanged: (val) {
-                    setState(() => _autoAcceptFiles = val);
-                    _savePreference('auto_accept_files', val);
-                  },
-                ),
-                _buildDivider(),
-                _buildSwitchTile(
-                  context: context,
-                  icon: Icons.photo_library_outlined,
-                  title: 'Save to Gallery',
-                  subtitle: 'Save images to photo gallery',
-                  value: _saveToGallery,
-                  onChanged: (val) {
-                    setState(() => _saveToGallery = val);
-                    _savePreference('save_to_gallery', val);
-                  },
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 35),
-
+            _buildPreferencesCard(isDark),
+            const SizedBox(height: 24),
+            
+            // Appearance Section
+            _buildAppearanceCard(isDark, themeProvider, localeProvider),
+            const SizedBox(height: 24),
+            
             // About Section
-            _buildSectionHeader(context, 'ABOUT'),
-            _buildSection(
-              context,
-              children: [
-                _buildListTile(
-                  context: context,
-                  icon: Icons.info_outline,
-                  title: 'About App',
-                  trailing: const Icon(Icons.chevron_right, size: 20),
-                  onTap: _showAboutDialog,
-                ),
-                _buildDivider(),
-                _buildListTile(
-                  context: context,
-                  icon: Icons.article_outlined,
-                  title: 'Version',
-                  trailing: Text(
-                    _packageInfo?.version ?? '1.0.0',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-                _buildDivider(),
-                _buildListTile(
-                  context: context,
-                  icon: Icons.code,
-                  title: 'Developer',
-                  trailing: Text(
-                    'Team Narcos',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 35),
-
-            // Developer Tools Section
-            _buildSectionHeader(context, 'DEVELOPER TOOLS'),
-            _buildSection(
-              context,
-              children: [
-                _buildListTile(
-                  context: context,
-                  icon: Icons.science_outlined,
-                  title: 'Test WebRTC Connection',
-                  subtitle: 'Verify P2P connectivity',
-                  trailing: const Icon(Icons.play_arrow, size: 20),
-                  onTap: () => WebRTCTest.showTestDialog(context),
-                ),
-                _buildDivider(),
-                _buildListTile(
-                  context: context,
-                  icon: Icons.bug_report_outlined,
-                  title: 'Run Monitoring Test',
-                  subtitle: 'Monitor connection states',
-                  trailing: const Icon(Icons.play_arrow, size: 20),
-                  onTap: () {
-                    WebRTCTest.testConnectionWithMonitoring();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                            'Monitoring test started. Check console for logs.'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  },
-                ),
-                _buildDivider(),
-                _buildListTile(
-                  context: context,
-                  icon: Icons.wifi_tethering,
-                  title: 'Test Nearby Connections',
-                  subtitle: 'Android/iOS P2P connectivity',
-                  trailing: const Icon(Icons.play_arrow, size: 20),
-                  onTap: () => NearbyTest.showTestDialog(context),
-                ),
-                _buildDivider(),
-                _buildListTile(
-                  context: context,
-                  icon: Icons.animation,
-                  title: 'Animation Showcase',
-                  subtitle: 'Test all animations & transitions',
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      PageTransitions.cupertinoRoute(
-                          const AnimationTestScreen()),
-                    );
-                  },
-                ),
-                _buildDivider(),
-                _buildListTile(
-                  context: context,
-                  icon: Icons.phone_iphone,
-                  title: 'iOS Components',
-                  subtitle: 'Cupertino widgets & haptic feedback',
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      PageTransitions.cupertinoRoute(
-                          const IOSComponentsTestScreen()),
-                    );
-                  },
-                ),
-                _buildDivider(),
-                _buildListTile(
-                  context: context,
-                  icon: Icons.auto_awesome,
-                  title: 'Advanced UI Features',
-                  subtitle: 'Thumbnails, drag-drop, swipe, notifications',
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      PageTransitions.cupertinoRoute(
-                          const AdvancedUITestScreen()),
-                    );
-                  },
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 35),
-
-            // Legal Section
-            _buildSectionHeader(context, 'LEGAL'),
-            _buildSection(
-              context,
-              children: [
-                _buildListTile(
-                  context: context,
-                  icon: Icons.privacy_tip_outlined,
-                  title: 'Privacy Policy',
-                  trailing: const Icon(Icons.chevron_right, size: 20),
-                  onTap: () {
-                    // Add privacy policy link
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Privacy Policy coming soon')),
-                    );
-                  },
-                ),
-                _buildDivider(),
-                _buildListTile(
-                  context: context,
-                  icon: Icons.description_outlined,
-                  title: 'Terms of Service',
-                  trailing: const Icon(Icons.chevron_right, size: 20),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Terms of Service coming soon')),
-                    );
-                  },
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 50),
-          ], // Closes ListView children
-        ), // Closes ListView
-      ), // Closes Material
-    ); // Closes SafeArea
-  } // Closes build method
-
-  Widget _buildSectionHeader(BuildContext context, String title) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: Colors.grey[600],
-          letterSpacing: 0.5,
+            _buildAboutCard(isDark),
+            const SizedBox(height: 32),
+          ],
+        ),
         ),
       ),
     );
   }
 
-  Widget _buildSection(BuildContext context, {required List<Widget> children}) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  Widget _buildProfileCard(bool isDark) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: IOSTheme.cardColor(isDark),
+        borderRadius: BorderRadius.circular(IOSTheme.cardRadius),
+      ),
+      child: Column(
+        children: [
+          // Avatar
+          Center(
+            child: AvatarPicker(
+              initialAvatar: _avatarFile,
+              onAvatarChanged: _saveAvatar,
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          // Username display
+          Text(
+            _username.isEmpty ? 'Set your username' : _username,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: IOSTheme.primaryTextColor(isDark),
+            ),
+          ),
+          const SizedBox(height: 20),
+          
+          // Username input
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: IOSTheme.separatorColor(isDark).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  CupertinoIcons.person,
+                  color: IOSTheme.systemBlue,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: CupertinoTextField(
+                    controller: _usernameController,
+                    placeholder: 'Enter your username',
+                    decoration: const BoxDecoration(),
+                    style: TextStyle(
+                      color: IOSTheme.primaryTextColor(isDark),
+                      fontSize: 16,
+                    ),
+                    onChanged: _saveUsername,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreferencesCard(bool isDark) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        color: IOSTheme.cardColor(isDark),
+        borderRadius: BorderRadius.circular(IOSTheme.cardRadius),
       ),
       child: Column(
-        children: children,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IOSSectionHeader(title: 'Preferences', isDark: isDark),
+          IOSListTile(
+            leadingIcon: CupertinoIcons.bell,
+            title: 'Notifications',
+            subtitle: 'File transfer alerts',
+            isDark: isDark,
+            trailing: CupertinoSwitch(
+              value: _notificationsEnabled,
+              onChanged: (value) {
+                setState(() => _notificationsEnabled = value);
+                _savePreference('notifications_enabled', value);
+              },
+            ),
+          ),
+          IOSDivider(isDark: isDark),
+          IOSListTile(
+            leadingIcon: CupertinoIcons.download_circle,
+            title: 'Auto Accept Files',
+            subtitle: 'Accept files automatically',
+            isDark: isDark,
+            trailing: CupertinoSwitch(
+              value: _autoAcceptFiles,
+              onChanged: (value) {
+                setState(() => _autoAcceptFiles = value);
+                _savePreference('auto_accept_files', value);
+              },
+            ),
+          ),
+          IOSDivider(isDark: isDark),
+          IOSListTile(
+            leadingIcon: CupertinoIcons.photo,
+            title: 'Save to Gallery',
+            subtitle: 'Save images to gallery',
+            isDark: isDark,
+            trailing: CupertinoSwitch(
+              value: _saveToGallery,
+              onChanged: (value) {
+                setState(() => _saveToGallery = value);
+                _savePreference('save_to_gallery', value);
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildListTile({
-    required BuildContext context,  // Add required context parameter
-    required String title,
-    String? subtitle,
-    IconData? icon,
-    Widget? trailing,
-    VoidCallback? onTap,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return ListTile(
-      title: Text(title),
-      subtitle: subtitle != null ? Text(subtitle) : null,
-      leading: icon != null ? Icon(icon, color: isDark ? Colors.white70 : Colors.grey[600]) : null,
-      trailing: trailing,
-      onTap: onTap,
-    );
-  }
-
-  Widget _buildSwitchTile({
-    required BuildContext context,  // Add required context parameter
-    required String title,
-    String? subtitle,
-    IconData? icon,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return ListTile(
-      title: Text(title),
-      subtitle: subtitle != null ? Text(subtitle) : null,
-      leading: icon != null ? Icon(icon, color: isDark ? Colors.white70 : Colors.grey[600]) : null,
-      trailing: Switch.adaptive(
-        value: value,
-        onChanged: onChanged,
+  Widget _buildAppearanceCard(bool isDark, ThemeProvider themeProvider, LocaleProvider localeProvider) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: IOSTheme.cardColor(isDark),
+        borderRadius: BorderRadius.circular(IOSTheme.cardRadius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IOSSectionHeader(title: 'Appearance', isDark: isDark),
+          IOSListTile(
+            leadingIcon: isDark ? CupertinoIcons.moon_fill : CupertinoIcons.sun_max_fill,
+            title: 'Dark Mode',
+            subtitle: isDark ? 'Dark theme active' : 'Light theme active',
+            isDark: isDark,
+            trailing: CupertinoSwitch(
+              value: isDark,
+              onChanged: (value) {
+                themeProvider.setBrightness(
+                  value ? Brightness.dark : Brightness.light,
+                );
+              },
+            ),
+          ),
+          IOSDivider(isDark: isDark),
+          IOSListTile(
+            leadingIcon: CupertinoIcons.globe,
+            title: 'Language',
+            subtitle: localeProvider.locale.languageCode == 'hi' ? 'हिन्दी' : 'English',
+            isDark: isDark,
+            trailing: CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: () => _showLanguagePicker(localeProvider),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: IOSTheme.systemBlue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  localeProvider.locale.languageCode == 'hi' ? 'हिन्दी' : 'English',
+                  style: const TextStyle(
+                    color: IOSTheme.systemBlue,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildDivider() {
-    return const Divider(
-      height: 1,
-      indent: 56,
-      thickness: 0.5,
+  Widget _buildAboutCard(bool isDark) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: IOSTheme.cardColor(isDark),
+        borderRadius: BorderRadius.circular(IOSTheme.cardRadius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IOSSectionHeader(title: 'About', isDark: isDark),
+          IOSListTile(
+            leadingIcon: CupertinoIcons.info_circle,
+            title: 'About App',
+            subtitle: 'Version ${_packageInfo?.version ?? '1.0.0'}',
+            isDark: isDark,
+            trailing: const Icon(CupertinoIcons.chevron_right, size: 16),
+            onTap: _showAboutDialog,
+          ),
+          IOSDivider(isDark: isDark),
+          IOSListTile(
+            leadingIcon: CupertinoIcons.lock_shield,
+            title: 'Privacy Policy',
+            isDark: isDark,
+            trailing: const Icon(CupertinoIcons.chevron_right, size: 16),
+            onTap: () {
+              // Show Cupertino dialog instead of SnackBar
+              showCupertinoDialog(
+                context: context,
+                builder: (context) => CupertinoAlertDialog(
+                  title: const Text('Privacy Policy'),
+                  content: const Text('Privacy Policy coming soon'),
+                  actions: [
+                    CupertinoDialogAction(
+                      child: const Text('OK'),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          IOSDivider(isDark: isDark),
+          IOSListTile(
+            leadingIcon: CupertinoIcons.doc_text,
+            title: 'Terms of Service',
+            isDark: isDark,
+            trailing: const Icon(CupertinoIcons.chevron_right, size: 16),
+            onTap: () {
+              showCupertinoDialog(
+                context: context,
+                builder: (context) => CupertinoAlertDialog(
+                  title: const Text('Terms of Service'),
+                  content: const Text('Terms of Service coming soon'),
+                  actions: [
+                    CupertinoDialogAction(
+                      child: const Text('OK'),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  void _showLanguagePicker(LocaleProvider localeProvider) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (BuildContext context) => Container(
+        height: 216,
+        padding: const EdgeInsets.only(top: 6.0),
+        margin: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        color: CupertinoColors.systemBackground.resolveFrom(context),
+        child: SafeArea(
+          top: false,
+          child: CupertinoPicker(
+            magnification: 1.22,
+            squeeze: 1.2,
+            useMagnifier: true,
+            itemExtent: 32.0,
+            scrollController: FixedExtentScrollController(
+              initialItem: localeProvider.locale.languageCode == 'hi' ? 1 : 0,
+            ),
+            onSelectedItemChanged: (int selectedItem) {
+              final locale = selectedItem == 0 ? const Locale('en') : const Locale('hi');
+              localeProvider.setLocale(locale);
+            },
+            children: const [
+              Center(child: Text('English')),
+              Center(child: Text('हिन्दी')),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAboutDialog() {
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('About Cross-Platform Airdrop'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 16),
+            Text('Version: ${_packageInfo?.version ?? '1.0.0'}'),
+            const SizedBox(height: 8),
+            const Text('A modern file sharing app for cross-platform devices.'),
+            const SizedBox(height: 8),
+            const Text('Developed by Team Narcos'),
+          ],
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('OK'),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
     );
   }
 }

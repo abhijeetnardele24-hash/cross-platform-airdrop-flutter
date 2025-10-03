@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-// import 'package:workmanager/workmanager.dart' as wm;
-// import 'package:background_fetch/background_fetch.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'file_transfer_service.dart';
 import 'notification_service.dart';
@@ -57,7 +55,7 @@ class BackgroundService {
       // Background task scheduling disabled for simplified build
       debugPrint('Background transfer scheduled for: $transferId');
     } catch (e) {
-      print('Error starting background transfer: $e');
+      debugPrint('Error starting background transfer: $e');
     }
   }
 
@@ -118,13 +116,11 @@ class BackgroundService {
           progress,
         );
       } catch (e) {
-        print('Error updating progress: $e');
+        debugPrint('Error updating progress: $e');
         timer.cancel();
       }
     });
   }
-
-  // Background transfer processing removed for simplified build
 
   Future<void> stopBackgroundTransfer(String transferId) async {
     _progressTimer?.cancel();

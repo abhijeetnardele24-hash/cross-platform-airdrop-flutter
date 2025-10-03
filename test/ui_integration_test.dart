@@ -12,7 +12,7 @@ import 'package:cross_platform_airdrop/providers/file_transfer_provider.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('Main UI Tests', () {
+  group('UI Integration Tests', () {
     late ThemeProvider themeProvider;
     late LocaleProvider localeProvider;
     late DeviceProvider deviceProvider;
@@ -35,7 +35,7 @@ void main() {
 
       // Verify splash screen is shown initially
       expect(find.text('AirDrop'), findsOneWidget);
-      expect(find.text('Share Files Instantly'), findsOneWidget);
+      expect(find.text('File Sharing Reimagined'), findsOneWidget);
     });
 
     testWidgets('Splash screen displays correctly', (WidgetTester tester) async {
@@ -181,6 +181,47 @@ void main() {
         ),
       );
 
+      expect(find.text('Active: 0'), findsOneWidget);
+    });
+
+    testWidgets('All providers work together', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<ThemeProvider>.value(value: themeProvider),
+            ChangeNotifierProvider<LocaleProvider>.value(value: localeProvider),
+            ChangeNotifierProvider<DeviceProvider>.value(value: deviceProvider),
+            ChangeNotifierProvider<RoomProvider>.value(value: roomProvider),
+            ChangeNotifierProvider<TransferProvider>.value(value: transferProvider),
+            ChangeNotifierProvider<FileTransferProvider>.value(value: fileTransferProvider),
+          ],
+          child: MaterialApp(
+            home: Consumer6<ThemeProvider, LocaleProvider, DeviceProvider, 
+                RoomProvider, TransferProvider, FileTransferProvider>(
+              builder: (context, theme, locale, device, room, transfer, fileTransfer, child) {
+                return Scaffold(
+                  body: Column(
+                    children: [
+                      Text('Theme: ${theme.brightness == Brightness.dark ? 'Dark' : 'Light'}'),
+                      Text('Locale: ${locale.locale.languageCode}'),
+                      Text('Device: ${device.currentDevice?.name ?? 'None'}'),
+                      Text('Room: ${room.roomCode ?? 'None'}'),
+                      Text('Tasks: ${transfer.tasks.length}'),
+                      Text('Active: ${fileTransfer.activeTransfers.length}'),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Theme: Light'), findsOneWidget);
+      expect(find.text('Locale: en'), findsOneWidget);
+      expect(find.text('Device: None'), findsOneWidget);
+      expect(find.text('Room: None'), findsOneWidget);
+      expect(find.text('Tasks: 0'), findsOneWidget);
       expect(find.text('Active: 0'), findsOneWidget);
     });
   });
