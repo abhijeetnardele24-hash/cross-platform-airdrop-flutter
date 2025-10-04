@@ -12,13 +12,31 @@ import 'providers/locale_provider.dart';
 import 'providers/room_provider.dart';
 import 'providers/transfer_provider.dart';
 import 'screens/settings_screen.dart';
-import 'screens/onboarding_screen.dart';
-import 'screens/classic_splash_screen.dart';
+import 'screens/premium_onboarding_screen.dart';
+import 'screens/simple_splash_screen.dart';
+import 'screens/modern_main_screen.dart';
 import 'services/notification_service.dart';
 import 'utils/performance_config.dart';
 
+import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show Platform;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Request necessary permissions on app start for Android physical devices
+  if (!kIsWeb && (Platform.isAndroid)) {
+    await [
+      Permission.bluetooth,
+      Permission.bluetoothAdvertise,
+      Permission.bluetoothConnect,
+      Permission.bluetoothScan,
+      Permission.location,
+      Permission.nearbyWifiDevices,
+      Permission.storage,
+    ].request();
+  }
 
   // Configure performance optimizations
   PerformanceConfig.configurePerformance();
@@ -76,9 +94,9 @@ class _RootScreenState extends State<_RootScreen> {
       );
     }
     if (_showOnboarding!) {
-      return OnboardingScreen(onGetStarted: _completeOnboarding);
+      return PremiumOnboardingScreen(onGetStarted: _completeOnboarding);
     }
-    return const ClassicSplashScreen();
+    return const SimpleSplashScreen();
   }
 }
 

@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'ios_typography.dart';
 import 'package:flutter/services.dart';
 
 class IOSTheme {
@@ -69,10 +70,10 @@ class IOSTheme {
   static const Color lightSeparator = Color(0x4D3C3C43);
   static const Color darkSeparator = Color(0x4DEBEBF5);
 
-  // Typography - SF Pro Display/Text
-  static const String fontFamily = 'SF Pro Display';
-  static const String textFontFamily = 'SF Pro Text';
-  static const String monoFontFamily = 'SF Mono';
+  // Typography - Poppins Font Family
+  static const String fontFamily = 'Poppins';
+  static const String textFontFamily = 'Poppins';
+  static const String monoFontFamily = 'Poppins';
 
   static const TextStyle largeTitle = TextStyle(
     fontSize: 34,
